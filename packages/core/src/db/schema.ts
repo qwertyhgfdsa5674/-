@@ -27,8 +27,12 @@ export const products = pgTable("products", {
   description: varchar("description", { length: 2000 }),
   status: productStatus("status").notNull().default("draft"),
   sourceUrl: varchar("source_url", { length: 1000 }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
 });
 
 export const suppliers = pgTable("suppliers", {

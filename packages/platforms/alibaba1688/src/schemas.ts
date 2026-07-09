@@ -7,12 +7,19 @@ export const Alibaba1688ConfigSchema = z.object({
   refreshToken: z.string().optional(),
   tokenExpiresAt: z.number().int().positive().optional(),
   apiBaseUrl: z.string().url().default("https://gw.open.1688.com/openapi"),
-  tokenUrl: z.string().url().default("https://gw.open.1688.com/openapi/http/1/system.oauth2/getToken"),
+  tokenUrl: z
+    .string()
+    .url()
+    .default("https://gw.open.1688.com/openapi/http/1/system.oauth2/getToken"),
   requestsPerMinute: z.number().int().positive().default(10)
 });
 
-export type Alibaba1688Config = Partial<z.input<typeof Alibaba1688ConfigSchema>>;
-export type ResolvedAlibaba1688Config = z.output<typeof Alibaba1688ConfigSchema>;
+export type Alibaba1688Config = Partial<
+  z.input<typeof Alibaba1688ConfigSchema>
+>;
+export type ResolvedAlibaba1688Config = z.output<
+  typeof Alibaba1688ConfigSchema
+>;
 
 export const SearchParamsSchema = z.object({
   keyword: z.string().min(1),

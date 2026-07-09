@@ -3,16 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "corepack pnpm -r build",
-    "dev": "corepack pnpm -r --parallel dev",
-    "lint": "corepack pnpm -r lint",
-    "typecheck": "corepack pnpm -r typecheck",
-    "test": "corepack pnpm -r test",
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
     "format": "prettier --write ."
   },
   "devDependencies": {

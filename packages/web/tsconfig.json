@@ -4,8 +4,8 @@
     "outDir": "dist-types",
     "rootDir": ".",
     "jsx": "react-jsx",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "types": ["vite/client"]
   },

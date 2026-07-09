@@ -30,10 +30,16 @@ export class SupplierReliabilityStrategy implements DimensionScoringStrategy {
 
   public score(input: ProductScoreInput): number {
     const yearsScore = clampScore((input.supplier.years / 10) * 100);
-    const disputeScore = clampScore((1 - normalizeRate(input.supplier.disputeRate)) * 100);
-    const responseScore = clampScore(normalizeRate(input.supplier.responseRate) * 100);
+    const disputeScore = clampScore(
+      (1 - normalizeRate(input.supplier.disputeRate)) * 100
+    );
+    const responseScore = clampScore(
+      normalizeRate(input.supplier.responseRate) * 100
+    );
 
-    return clampScore(yearsScore * 0.4 + disputeScore * 0.4 + responseScore * 0.2);
+    return clampScore(
+      yearsScore * 0.4 + disputeScore * 0.4 + responseScore * 0.2
+    );
   }
 }
 
@@ -41,13 +47,23 @@ export class ProductQualityStrategy implements DimensionScoringStrategy {
   public readonly key = "productQuality" as const;
 
   public score(input: ProductScoreInput): number {
-    const positiveReviewRate = normalizeRate(readNumberSpec(input, "positiveReviewRate", 0.85));
-    const returnRate = normalizeRate(readNumberSpec(input, "returnRate", 0.08));
-    const hasRealPhotos = readBooleanSpec(input, "hasRealPhotos", input.product.images.length >= 3);
+    const positiveReviewRate = normalizeRate(
+      readQualityMetric(input, "positiveReviewRate", 0.85)
+    );
+    const returnRate = normalizeRate(
+      readQualityMetric(input, "returnRate", 0.08)
+    );
+    const hasRealPhotos = readQualityFlag(
+      input,
+      "hasRealPhotos",
+      input.product.images.length >= 3
+    );
     const realPhotoScore = hasRealPhotos ? 100 : 0;
 
     return clampScore(
-      positiveReviewRate * 50 + (1 - returnRate) * 100 * 0.3 + realPhotoScore * 0.2
+      positiveReviewRate * 50 +
+        (1 - returnRate) * 100 * 0.3 +
+        realPhotoScore * 0.2
     );
   }
 }
@@ -56,13 +72,21 @@ export class FulfillmentCapabilityStrategy implements DimensionScoringStrategy {
   public readonly key = "fulfillmentCapability" as const;
 
   public score(input: ProductScoreInput): number {
-    const totalStock = input.product.skus.reduce((total, sku) => total + sku.stock, 0);
+    const totalStock = input.product.skus.reduce(
+      (total, sku) => total + sku.stock,
+      0
+    );
     const stockDepthScore = clampScore((totalStock / 500) * 100);
-    const shippingHours = readNumberSpec(input, "shippingHours", 48);
-    const shippingSpeedScore = shippingHours <= 24 ? 100 : shippingHours <= 48 ? 75 : 45;
-    const logisticsScore = clampScore(readNumberSpec(input, "logisticsScore", 80));
+    const shippingHours = readFulfillmentMetric(input, "shippingHours", 48);
+    const shippingSpeedScore =
+      shippingHours <= 24 ? 100 : shippingHours <= 48 ? 75 : 45;
+    const logisticsScore = clampScore(
+      readFulfillmentMetric(input, "logisticsScore", 80)
+    );
 
-    return clampScore(stockDepthScore * 0.4 + shippingSpeedScore * 0.35 + logisticsScore * 0.25);
+    return clampScore(
+      stockDepthScore * 0.4 + shippingSpeedScore * 0.35 + logisticsScore * 0.25
+    );
   }
 }
 
@@ -70,8 +94,10 @@ export class ProfitMarginStrategy implements DimensionScoringStrategy {
   public readonly key = "profitMargin" as const;
 
   public score(input: ProductScoreInput): number {
-    const totalCost = input.cost.unitPrice + input.cost.shipping + input.cost.platformFee;
-    const margin = (input.cost.targetPrice - totalCost) / input.cost.targetPrice;
+    const totalCost =
+      input.cost.unitPrice + input.cost.shipping + input.cost.platformFee;
+    const margin =
+      (input.cost.targetPrice - totalCost) / input.cost.targetPrice;
 
     if (margin >= 0.3) {
       return 100;
@@ -115,31 +141,26 @@ function normalizeRate(value: number): number {
   return value;
 }
 
-function readNumberSpec(input: ProductScoreInput, key: string, fallback: number): number {
-  const value = input.product.specs[key];
-
-  if (typeof value === "number") {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  return fallback;
+function readQualityMetric(
+  input: ProductScoreInput,
+  key: "positiveReviewRate" | "returnRate",
+  fallback: number
+): number {
+  return input.qualityMetrics?.[key] ?? fallback;
 }
 
-function readBooleanSpec(input: ProductScoreInput, key: string, fallback: boolean): boolean {
-  const value = input.product.specs[key];
+function readQualityFlag(
+  input: ProductScoreInput,
+  key: "hasRealPhotos",
+  fallback: boolean
+): boolean {
+  return input.qualityMetrics?.[key] ?? fallback;
+}
 
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    return value === "true";
-  }
-
-  return fallback;
+function readFulfillmentMetric(
+  input: ProductScoreInput,
+  key: "shippingHours" | "logisticsScore",
+  fallback: number
+): number {
+  return input.fulfillmentMetrics?.[key] ?? fallback;
 }

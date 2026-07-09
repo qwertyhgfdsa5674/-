@@ -32,10 +32,12 @@ export async function publishProduct(
   const categoryId = options.resolveCategory
     ? await options.resolveCategory(parsedProduct)
     : parsedProduct.categoryId;
-  const uploadedImages = await Promise.all(
+  const uploadedImages: (string | undefined)[] = await Promise.all(
     parsedImages.map((image) => image.url ?? options.uploadImage?.(image))
   );
-  const imageUrls = uploadedImages.filter((image): image is string => Boolean(image));
+  const imageUrls = uploadedImages.filter(
+    (url): url is string => typeof url === "string" && url.length > 0
+  );
   const result = await options.client.addGoods({
     ...parsedProduct,
     categoryId,
@@ -71,8 +73,11 @@ export async function processOrder(
   try {
     const parsedOrder = PddOrderSchema.parse(order);
     const detail = await options.pddClient.getOrderDetail(parsedOrder.orderSn);
-    const supplierOrder = await options.supplierOrderService.createOrder(detail);
-    const logistics = await options.supplierOrderService.getLogistics(supplierOrder.supplierOrderId);
+    const supplierOrder =
+      await options.supplierOrderService.createOrder(detail);
+    const logistics = await options.supplierOrderService.getLogistics(
+      supplierOrder.supplierOrderId
+    );
     await options.pddClient.sendGoods(parsedOrder.orderSn, logistics);
 
     return {
@@ -82,7 +87,10 @@ export async function processOrder(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown PDD order processing error"
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown PDD order processing error"
     };
   }
 }

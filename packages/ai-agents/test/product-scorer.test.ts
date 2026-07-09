@@ -33,13 +33,7 @@ const baseInput: ProductScoreInput = {
         price: 30
       }
     ],
-    specs: {
-      positiveReviewRate: 0.96,
-      returnRate: 0.04,
-      hasRealPhotos: true,
-      shippingHours: 24,
-      logisticsScore: 90
-    }
+    specs: {}
   },
   supplier: {
     id: "seller-1",
@@ -60,6 +54,15 @@ const baseInput: ProductScoreInput = {
     shipping: 5,
     platformFee: 3,
     targetPrice: 69
+  },
+  qualityMetrics: {
+    positiveReviewRate: 0.96,
+    returnRate: 0.04,
+    hasRealPhotos: true
+  },
+  fulfillmentMetrics: {
+    shippingHours: 24,
+    logisticsScore: 90
   }
 };
 

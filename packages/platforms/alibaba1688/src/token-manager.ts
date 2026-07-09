@@ -2,7 +2,10 @@ import { Alibaba1688Error } from "./errors.js";
 import { SignatureGenerator } from "./signature.js";
 import { TokenResponseSchema, type TokenResponse } from "./schemas.js";
 
-export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type FetchLike = (
+  input: string | URL,
+  init?: RequestInit
+) => Promise<Response>;
 
 export interface TokenManagerOptions {
   appKey: string;
@@ -30,7 +33,9 @@ export class TokenManager {
     this.expiresAt = options.expiresAt;
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.now ?? Date.now;
-    this.tokenUrl = options.tokenUrl ?? "https://gw.open.1688.com/openapi/http/1/system.oauth2/getToken";
+    this.tokenUrl =
+      options.tokenUrl ??
+      "https://gw.open.1688.com/openapi/http/1/system.oauth2/getToken";
   }
 
   public async getAccessToken(): Promise<string> {
@@ -101,7 +106,8 @@ export class TokenManager {
     const token = parseTokenResponse(data);
     this.accessToken = token.accessToken;
     this.refreshTokenValue = token.refreshToken ?? this.refreshTokenValue;
-    this.expiresAt = token.expiresAt ?? this.now() + (token.expiresIn ?? 7200) * 1000;
+    this.expiresAt =
+      token.expiresAt ?? this.now() + (token.expiresIn ?? 7200) * 1000;
 
     return this.accessToken;
   }

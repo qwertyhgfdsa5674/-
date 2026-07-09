@@ -69,7 +69,8 @@ export class PddClient {
       signMethod: config.signMethod
     });
     this.fetchFn = options.fetchFn ?? fetch;
-    this.rateLimiter = options.rateLimiter ?? new PddRateLimiter(this.config.requestsPerSecond);
+    this.rateLimiter =
+      options.rateLimiter ?? new PddRateLimiter(this.config.requestsPerSecond);
     this.tokenManager =
       options.tokenManager ??
       new PddTokenManager({
@@ -84,7 +85,10 @@ export class PddClient {
   }
 
   public async addGoods(params: AddGoodsParams): Promise<AddGoodsResult> {
-    const result = await this.callApi("addGoods", AddGoodsParamsSchema.parse(params));
+    const result = await this.callApi(
+      "addGoods",
+      AddGoodsParamsSchema.parse(params)
+    );
     return AddGoodsResultSchema.parse(result);
   }
 
@@ -93,7 +97,10 @@ export class PddClient {
   }
 
   public async getGoodsList(params: GoodsListQuery): Promise<GoodsListResult> {
-    const result = await this.callApi("getGoodsList", GoodsListQuerySchema.parse(params));
+    const result = await this.callApi(
+      "getGoodsList",
+      GoodsListQuerySchema.parse(params)
+    );
     return GoodsListResultSchema.parse(result);
   }
 
@@ -110,12 +117,18 @@ export class PddClient {
     await this.callApi("updatePrice", { skuId, price });
   }
 
-  public async setSaleStatus(goodsId: string, isOnsale: boolean): Promise<void> {
+  public async setSaleStatus(
+    goodsId: string,
+    isOnsale: boolean
+  ): Promise<void> {
     await this.callApi("setSaleStatus", { goodsId, isOnsale });
   }
 
   public async getOrderList(params: OrderListQuery): Promise<OrderListResult> {
-    const result = await this.callApi("getOrderList", OrderListQuerySchema.parse(params));
+    const result = await this.callApi(
+      "getOrderList",
+      OrderListQuerySchema.parse(params)
+    );
     return OrderListResultSchema.parse(result);
   }
 
@@ -124,7 +137,10 @@ export class PddClient {
     return OrderDetailSchema.parse(result);
   }
 
-  public async sendGoods(orderSn: string, logistics: LogisticsInfo): Promise<void> {
+  public async sendGoods(
+    orderSn: string,
+    logistics: LogisticsInfo
+  ): Promise<void> {
     await this.callApi("sendGoods", {
       orderSn,
       logistics: LogisticsInfoSchema.parse(logistics)
@@ -140,7 +156,10 @@ export class PddClient {
     return this.config;
   }
 
-  private async callApi(methodKey: keyof typeof METHOD_MAP, params: Record<string, unknown>): Promise<unknown> {
+  private async callApi(
+    methodKey: keyof typeof METHOD_MAP,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
     await this.rateLimiter.acquire();
 
     const startedAt = Date.now();
@@ -214,13 +233,18 @@ export class PddClient {
     }
   }
 
-  private extractResult(payload: unknown, method: string, status: number): unknown {
+  private extractResult(
+    payload: unknown,
+    method: string,
+    status: number
+  ): unknown {
     const envelope = PddEnvelopeSchema.safeParse(payload);
 
     if (envelope.success && envelope.data.error_response) {
       throw new PddError({
         errorCode: String(envelope.data.error_response.error_code),
-        errorMessage: envelope.data.error_response.error_msg ?? "PDD API returned an error",
+        errorMessage:
+          envelope.data.error_response.error_msg ?? "PDD API returned an error",
         status,
         cause: payload
       });
@@ -241,7 +265,8 @@ export class PddClient {
     if (envelope.success && envelope.data.error_response) {
       return new PddError({
         errorCode: String(envelope.data.error_response.error_code),
-        errorMessage: envelope.data.error_response.error_msg ?? "PDD API request failed",
+        errorMessage:
+          envelope.data.error_response.error_msg ?? "PDD API request failed",
         status,
         cause: payload
       });
@@ -281,10 +306,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function redactSensitiveParams(params: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = new Set(["access_token", "refresh_token", "clientSecret", "client_secret", "sign"]);
+function redactSensitiveParams(
+  params: Record<string, unknown>
+): Record<string, unknown> {
+  const sensitiveKeys = new Set([
+    "access_token",
+    "refresh_token",
+    "clientSecret",
+    "client_secret",
+    "sign"
+  ]);
 
   return Object.fromEntries(
-    Object.entries(params).map(([key, value]) => [key, sensitiveKeys.has(key) ? "[REDACTED]" : value])
+    Object.entries(params).map(([key, value]) => [
+      key,
+      sensitiveKeys.has(key) ? "[REDACTED]" : value
+    ])
   );
 }

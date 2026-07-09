@@ -6,8 +6,14 @@ export const PddConfigSchema = z.object({
   accessToken: z.string().optional(),
   refreshToken: z.string().optional(),
   tokenExpiresAt: z.number().int().positive().optional(),
-  apiBaseUrl: z.string().url().default("https://gw-api.pinduoduo.com/api/router"),
-  tokenUrl: z.string().url().default("https://open-api.pinduoduo.com/oauth/token"),
+  apiBaseUrl: z
+    .string()
+    .url()
+    .default("https://gw-api.pinduoduo.com/api/router"),
+  tokenUrl: z
+    .string()
+    .url()
+    .default("https://open-api.pinduoduo.com/oauth/token"),
   requestsPerSecond: z.number().int().positive().default(5),
   signMethod: z.enum(["md5", "sha256"]).default("md5")
 });

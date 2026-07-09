@@ -22,3 +22,4 @@ export function createDefaultQueue(redisUrl = "redis://localhost:6379") {
 }
 
 export { createIdempotencyKey };
+export * from "./workers/order-fulfillment.js";

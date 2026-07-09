@@ -34,7 +34,7 @@ jobs:
         service: [server, web]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Docker metadata
         id: meta
@@ -75,27 +75,27 @@ jobs:
     environment: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Upload compose and nginx config
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" "mkdir -p '${{ vars.DEPLOY_PATH }}'"
-          scp -i ~/.ssh/deploy_key docker-compose.prod.yml "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH }}/docker-compose.prod.yml"
-          scp -i ~/.ssh/deploy_key -r nginx "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH }}/"
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "mkdir -p '${{ secrets.DEPLOY_PATH }}'"
+          scp -i ~/.ssh/deploy_key docker-compose.prod.yml "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/docker-compose.prod.yml"
+          scp -i ~/.ssh/deploy_key -r nginx "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/"
 
       - name: Write remote environment
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" <<'EOF'
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'EOF'
             set -euo pipefail
-            mkdir -p "${{ vars.DEPLOY_PATH }}"
-            cd "${{ vars.DEPLOY_PATH }}"
+            mkdir -p "${{ secrets.DEPLOY_PATH }}"
+            cd "${{ secrets.DEPLOY_PATH }}"
             cat > .env <<'ENV_FILE'
           REGISTRY=${{ env.REGISTRY }}
           IMAGE_NAMESPACE=${{ github.repository }}
@@ -126,9 +126,9 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           command: |
-            ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" <<'EOF'
+            ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'EOF'
               set -euo pipefail
-              cd "${{ vars.DEPLOY_PATH }}"
+              cd "${{ secrets.DEPLOY_PATH }}"
               if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
                 printf '%s' "${{ secrets.GHCR_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ vars.GHCR_USERNAME || github.actor }}" --password-stdin
               fi

@@ -26,7 +26,11 @@ import {
   type SellerInfo
 } from "./schemas.js";
 import { SignatureGenerator } from "./signature.js";
-import { formatTimestamp, TokenManager, type FetchLike } from "./token-manager.js";
+import {
+  formatTimestamp,
+  TokenManager,
+  type FetchLike
+} from "./token-manager.js";
 
 const METHOD_MAP = {
   searchProducts: "com.alibaba.product.search",
@@ -51,7 +55,10 @@ export class Alibaba1688Client {
   private readonly rateLimiter: RateLimiter;
   private readonly tokenManager: TokenManager;
 
-  public constructor(config: Alibaba1688Config = {}, options: Alibaba1688ClientOptions = {}) {
+  public constructor(
+    config: Alibaba1688Config = {},
+    options: Alibaba1688ClientOptions = {}
+  ) {
     this.config = Alibaba1688ConfigSchema.parse({
       appKey: config.appKey ?? process.env["ALIBABA_APP_KEY"],
       appSecret: config.appSecret ?? process.env["ALIBABA_APP_SECRET"],
@@ -63,7 +70,8 @@ export class Alibaba1688Client {
       requestsPerMinute: config.requestsPerMinute
     });
     this.fetchFn = options.fetchFn ?? fetch;
-    this.rateLimiter = options.rateLimiter ?? new RateLimiter(this.config.requestsPerMinute);
+    this.rateLimiter =
+      options.rateLimiter ?? new RateLimiter(this.config.requestsPerMinute);
     this.tokenManager =
       options.tokenManager ??
       new TokenManager({
@@ -78,11 +86,16 @@ export class Alibaba1688Client {
   }
 
   public async searchProducts(params: SearchParams): Promise<SearchResult> {
-    const result = await this.callApi("searchProducts", SearchParamsSchema.parse(params));
+    const result = await this.callApi(
+      "searchProducts",
+      SearchParamsSchema.parse(params)
+    );
     return SearchResultSchema.parse(result);
   }
 
-  public async getProductDetail(productIds: string[]): Promise<ProductDetail[]> {
+  public async getProductDetail(
+    productIds: string[]
+  ): Promise<ProductDetail[]> {
     const result = await this.callApi("getProductDetail", { productIds });
     return ProductDetailSchema.array().parse(result);
   }
@@ -108,7 +121,10 @@ export class Alibaba1688Client {
   }
 
   public async createOrder(params: OrderParams): Promise<OrderResult> {
-    const result = await this.callApi("createOrder", OrderParamsSchema.parse(params));
+    const result = await this.callApi(
+      "createOrder",
+      OrderParamsSchema.parse(params)
+    );
     return OrderResultSchema.parse(result);
   }
 
@@ -121,7 +137,10 @@ export class Alibaba1688Client {
     return this.config;
   }
 
-  private async callApi(methodKey: keyof typeof METHOD_MAP, params: Record<string, unknown>): Promise<unknown> {
+  private async callApi(
+    methodKey: keyof typeof METHOD_MAP,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
     await this.rateLimiter.acquire();
 
     const startedAt = Date.now();
@@ -202,7 +221,8 @@ export class Alibaba1688Client {
     if (envelope.data.success === false || envelope.data.errorCode) {
       throw new Alibaba1688Error({
         errorCode: envelope.data.errorCode ?? "OPENAPI_ERROR",
-        errorMessage: envelope.data.errorMessage ?? "Alibaba 1688 API returned an error",
+        errorMessage:
+          envelope.data.errorMessage ?? "Alibaba 1688 API returned an error",
         status
       });
     }
@@ -216,7 +236,8 @@ export class Alibaba1688Client {
     if (envelope.success) {
       return new Alibaba1688Error({
         errorCode: envelope.data.errorCode ?? `HTTP_${status}`,
-        errorMessage: envelope.data.errorMessage ?? "Alibaba 1688 API request failed",
+        errorMessage:
+          envelope.data.errorMessage ?? "Alibaba 1688 API request failed",
         status,
         cause: payload
       });
@@ -256,18 +277,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function toStringRecord(params: Record<string, unknown>): Record<string, string> {
+function toStringRecord(
+  params: Record<string, unknown>
+): Record<string, string> {
   return Object.fromEntries(
     Object.entries(params)
       .filter(([, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)])
+      .map(([key, value]) => [
+        key,
+        typeof value === "string" ? value : JSON.stringify(value)
+      ])
   );
 }
 
-function redactSensitiveParams(params: Record<string, unknown>): Record<string, unknown> {
-  const sensitiveKeys = new Set(["access_token", "refresh_token", "appSecret", "app_secret", "sign"]);
+function redactSensitiveParams(
+  params: Record<string, unknown>
+): Record<string, unknown> {
+  const sensitiveKeys = new Set([
+    "access_token",
+    "refresh_token",
+    "appSecret",
+    "app_secret",
+    "sign"
+  ]);
 
   return Object.fromEntries(
-    Object.entries(params).map(([key, value]) => [key, sensitiveKeys.has(key) ? "[REDACTED]" : value])
+    Object.entries(params).map(([key, value]) => [
+      key,
+      sensitiveKeys.has(key) ? "[REDACTED]" : value
+    ])
   );
 }

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile } from "fs/promises";
 import { parse as parseYaml } from "yaml";
 import {
   DefaultScoringConfig,
@@ -8,7 +8,10 @@ import {
   type ScoreWeights
 } from "./schemas.js";
 
-const STRATEGY_WEIGHT_ADJUSTMENTS: Record<PricingStrategy, Partial<ScoreWeights>> = {
+const STRATEGY_WEIGHT_ADJUSTMENTS: Record<
+  PricingStrategy,
+  Partial<ScoreWeights>
+> = {
   low_price: {
     priceCompetitiveness: 0.4,
     supplierReliability: 0.2,
@@ -28,13 +31,18 @@ const STRATEGY_WEIGHT_ADJUSTMENTS: Record<PricingStrategy, Partial<ScoreWeights>
 
 export async function loadScoringConfig(path: string): Promise<ScoringConfig> {
   const content = await readFile(path, "utf8");
-  const parsed = path.endsWith(".json") ? JSON.parse(content) : parseYaml(content);
+  const parsed = path.endsWith(".json")
+    ? JSON.parse(content)
+    : parseYaml(content);
 
   return resolveScoringConfig(parsed);
 }
 
-export function resolveScoringConfig(config: Partial<ScoringConfig> = {}): ScoringConfig {
-  const pricingStrategy = config.pricingStrategy ?? DefaultScoringConfig.pricingStrategy;
+export function resolveScoringConfig(
+  config: Partial<ScoringConfig> = {}
+): ScoringConfig {
+  const pricingStrategy =
+    config.pricingStrategy ?? DefaultScoringConfig.pricingStrategy;
   const weights = {
     ...DefaultScoringConfig.weights,
     ...STRATEGY_WEIGHT_ADJUSTMENTS[pricingStrategy],

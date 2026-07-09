@@ -1,0 +1,15 @@
+name: title-taobao
+model: claude-sonnet-5
+temperature: 0.7
+system: |
+  你是一个淘宝搜索文案专家。生成{count}个商品标题，要求：
+  - 搜索优化优先，关键词自然堆叠
+  - 使用场景化表达，适合淘宝搜索流量
+  - 融入关键词：{keywords}
+  - 避免违规词（最、第一、国家级）
+  - 返回 JSON：{"titles":[{"text":"","platform":"taobao","strategy":"trend","keywords":[],"estimatedCTR":0.1}]}
+user: |
+  商品：{productName}
+  卖点：{sellingPoints}
+  价格：{price}元
+  语气：{tone}

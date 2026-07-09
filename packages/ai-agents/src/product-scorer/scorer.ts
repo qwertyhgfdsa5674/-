@@ -17,13 +17,18 @@ export class ProductScorer {
   private readonly config: ScoringConfig;
   private readonly strategies: Map<DimensionKey, DimensionScoringStrategy>;
 
-  public constructor(args: {
-    config?: Partial<ScoringConfig>;
-    strategies?: DimensionScoringStrategy[];
-  } = {}) {
+  public constructor(
+    args: {
+      config?: Partial<ScoringConfig>;
+      strategies?: DimensionScoringStrategy[];
+    } = {}
+  ) {
     this.config = resolveScoringConfig(args.config);
     this.strategies = new Map(
-      (args.strategies ?? createDefaultStrategies()).map((strategy) => [strategy.key, strategy])
+      (args.strategies ?? createDefaultStrategies()).map((strategy) => [
+        strategy.key,
+        strategy
+      ])
     );
   }
 
@@ -47,9 +52,13 @@ export class ProductScorer {
     };
   }
 
-  public async batchScore(inputs: ProductScoreInput[]): Promise<ProductScoreOutput[]> {
+  public async batchScore(
+    inputs: ProductScoreInput[]
+  ): Promise<ProductScoreOutput[]> {
     const scored = await Promise.all(inputs.map((input) => this.score(input)));
-    const sorted = [...scored].sort((left, right) => right.totalScore - left.totalScore);
+    const sorted = [...scored].sort(
+      (left, right) => right.totalScore - left.totalScore
+    );
     const rankByOutput = new Map<ProductScoreOutput, number>();
 
     sorted.forEach((output, index) => {
@@ -67,7 +76,10 @@ export class ProductScorer {
       priceCompetitiveness: this.scoreDimension("priceCompetitiveness", input),
       supplierReliability: this.scoreDimension("supplierReliability", input),
       productQuality: this.scoreDimension("productQuality", input),
-      fulfillmentCapability: this.scoreDimension("fulfillmentCapability", input),
+      fulfillmentCapability: this.scoreDimension(
+        "fulfillmentCapability",
+        input
+      ),
       profitMargin: this.scoreDimension("profitMargin", input)
     };
   }
@@ -95,7 +107,10 @@ function roundScore(score: number): number {
 }
 
 function recommend(score: number, riskFlags: string[]): ProductRecommendation {
-  if (riskFlags.includes("negative_profit") || riskFlags.includes("out_of_stock")) {
+  if (
+    riskFlags.includes("negative_profit") ||
+    riskFlags.includes("out_of_stock")
+  ) {
     return score >= 75 ? "consider" : "pass";
   }
 
@@ -114,9 +129,16 @@ function recommend(score: number, riskFlags: string[]): ProductRecommendation {
   return "pass";
 }
 
-function createRiskFlags(input: ProductScoreInput, scores: DimensionScores): string[] {
-  const totalStock = input.product.skus.reduce((total, sku) => total + sku.stock, 0);
-  const totalCost = input.cost.unitPrice + input.cost.shipping + input.cost.platformFee;
+function createRiskFlags(
+  input: ProductScoreInput,
+  scores: DimensionScores
+): string[] {
+  const totalStock = input.product.skus.reduce(
+    (total, sku) => total + sku.stock,
+    0
+  );
+  const totalCost =
+    input.cost.unitPrice + input.cost.shipping + input.cost.platformFee;
   const flags: string[] = [];
 
   if (totalStock <= 0) {
@@ -142,9 +164,15 @@ function createRiskFlags(input: ProductScoreInput, scores: DimensionScores): str
   return flags;
 }
 
-function createSummary(input: ProductScoreInput, score: number, riskFlags: string[]): string {
+function createSummary(
+  input: ProductScoreInput,
+  score: number,
+  riskFlags: string[]
+): string {
   const riskText =
-    riskFlags.length > 0 ? `, watch ${riskFlags.slice(0, 2).join(", ")}` : ", no major risk flags";
+    riskFlags.length > 0
+      ? `, watch ${riskFlags.slice(0, 2).join(", ")}`
+      : ", no major risk flags";
 
   return `${input.product.title} scored ${score}/100 with ${input.supplier.companyName}${riskText}.`;
 }

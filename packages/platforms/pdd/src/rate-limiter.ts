@@ -33,7 +33,10 @@ export class PddRateLimiter {
       return;
     }
 
-    this.tokens = Math.min(this.capacity, this.tokens + elapsedMs * this.refillPerMs);
+    this.tokens = Math.min(
+      this.capacity,
+      this.tokens + elapsedMs * this.refillPerMs
+    );
     this.lastRefillAt = now;
   }
 }

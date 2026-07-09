@@ -18,5 +18,8 @@
     "openai": "^4.77.0",
     "yaml": "^2.7.0",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1"
   }
 }

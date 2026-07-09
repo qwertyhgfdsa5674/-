@@ -11,7 +11,10 @@ export class PddSignatureGenerator {
     const payload =
       clientSecret +
       Object.keys(params)
-        .filter((key) => key !== "sign" && params[key] !== undefined && params[key] !== null)
+        .filter(
+          (key) =>
+            key !== "sign" && params[key] !== undefined && params[key] !== null
+        )
         .sort()
         .map((key) => `${key}${PddSignatureGenerator.stringify(params[key])}`)
         .join("") +
@@ -25,7 +28,11 @@ export class PddSignatureGenerator {
       return value;
     }
 
-    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
       return String(value);
     }
 

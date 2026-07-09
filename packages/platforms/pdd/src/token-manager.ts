@@ -1,7 +1,10 @@
 import { PddError } from "./errors.js";
 import { TokenResponseSchema, type TokenResponse } from "./schemas.js";
 
-export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type FetchLike = (
+  input: string | URL,
+  init?: RequestInit
+) => Promise<Response>;
 
 export interface PddTokenManagerOptions {
   clientId: string;
@@ -29,7 +32,8 @@ export class PddTokenManager {
     this.expiresAt = options.expiresAt;
     this.fetchFn = options.fetchFn ?? fetch;
     this.now = options.now ?? Date.now;
-    this.tokenUrl = options.tokenUrl ?? "https://open-api.pinduoduo.com/oauth/token";
+    this.tokenUrl =
+      options.tokenUrl ?? "https://open-api.pinduoduo.com/oauth/token";
   }
 
   public async getAccessToken(): Promise<string> {
@@ -95,7 +99,8 @@ export class PddTokenManager {
     const token = parseTokenResponse(data);
     this.accessToken = token.accessToken;
     this.refreshTokenValue = token.refreshToken ?? this.refreshTokenValue;
-    this.expiresAt = token.expiresAt ?? this.now() + (token.expiresIn ?? 7200) * 1000;
+    this.expiresAt =
+      token.expiresAt ?? this.now() + (token.expiresIn ?? 7200) * 1000;
 
     return this.accessToken;
   }

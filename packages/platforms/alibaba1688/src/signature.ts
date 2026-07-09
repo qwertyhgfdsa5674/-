@@ -1,11 +1,20 @@
 import { createHash } from "node:crypto";
 
 export class SignatureGenerator {
-  public static generate(params: Record<string, unknown>, appSecret: string): string {
+  public static generate(
+    params: Record<string, unknown>,
+    appSecret: string
+  ): string {
     const signingPayload = Object.keys(params)
-      .filter((key) => key !== "sign" && params[key] !== undefined && params[key] !== null)
+      .filter(
+        (key) =>
+          key !== "sign" && params[key] !== undefined && params[key] !== null
+      )
       .sort()
-      .map((key) => `${key}=${encodeURIComponent(SignatureGenerator.stringify(params[key]))}`)
+      .map(
+        (key) =>
+          `${key}=${encodeURIComponent(SignatureGenerator.stringify(params[key]))}`
+      )
       .join("&");
 
     return createHash("md5")
@@ -19,7 +28,11 @@ export class SignatureGenerator {
       return value;
     }
 
-    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
       return String(value);
     }
 

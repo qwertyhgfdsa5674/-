@@ -16,7 +16,11 @@ export const ScoreWeightsSchema = z.object({
 
 export type ScoreWeights = z.infer<typeof ScoreWeightsSchema>;
 
-export const PricingStrategySchema = z.enum(["low_price", "mid_volume", "high_margin"]);
+export const PricingStrategySchema = z.enum([
+  "low_price",
+  "mid_volume",
+  "high_margin"
+]);
 export type PricingStrategy = z.infer<typeof PricingStrategySchema>;
 
 export const ScoringConfigSchema = z
@@ -54,17 +58,36 @@ export const ProductScoreInputSchema = z.object({
   marketData: z.object({
     platformAvgPrice: z.number().positive(),
     searchVolume: z.number().nonnegative(),
-    competitorCount: z.number().int().nonnegative()
+    competitorCount: z.number().int().nonnegative(),
+    salesVelocity: z.number().nonnegative().optional(),
+    conversionRate: z.number().nonnegative().optional()
   }),
   cost: z.object({
     unitPrice: z.number().nonnegative(),
     shipping: z.number().nonnegative(),
     platformFee: z.number().nonnegative(),
-    targetPrice: z.number().positive()
-  })
+    targetPrice: z.number().positive(),
+    estimatedAdCost: z.number().nonnegative().optional(),
+    expectedRefundCost: z.number().nonnegative().optional()
+  }),
+  qualityMetrics: z
+    .object({
+      positiveReviewRate: z.number().nonnegative().optional(),
+      returnRate: z.number().nonnegative().optional(),
+      hasRealPhotos: z.boolean().optional()
+    })
+    .optional(),
+  fulfillmentMetrics: z
+    .object({
+      shippingHours: z.number().nonnegative().optional(),
+      logisticsScore: z.number().min(0).max(100).optional()
+    })
+    .optional()
 });
 
-export interface ProductScoreInput extends z.infer<typeof ProductScoreInputSchema> {
+export interface ProductScoreInput extends z.infer<
+  typeof ProductScoreInputSchema
+> {
   product: ProductDetail;
   supplier: SellerInfo;
 }

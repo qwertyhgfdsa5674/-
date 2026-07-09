@@ -26,3 +26,4 @@ export function createAiAgentClients(config: {
 }
 
 export * from "./product-scorer/index.js";
+export * from "./content-gen/index.js";

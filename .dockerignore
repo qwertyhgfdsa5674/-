@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.git
+.github
+.env
+.env.*
+*.log
+.turbo
+.vite
+playwright-report
+test-results
+uploads
+data
