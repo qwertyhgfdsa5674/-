@@ -99,7 +99,7 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}"
             cat > .env <<'ENV_FILE'
           REGISTRY=${{ env.REGISTRY }}
-          IMAGE_NAMESPACE=${{ github.repository }}
+          IMAGE_NAMESPACE=${{ github.repository_owner }}/ai-ecommerce
           IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
           HTTP_PORT=${{ vars.HTTP_PORT || '80' }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
