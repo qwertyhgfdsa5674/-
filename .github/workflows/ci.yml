@@ -66,6 +66,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared deps
+        run: pnpm --filter @ai-ecommerce/core --filter @ai-ecommerce/platform-alibaba1688 build
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -93,6 +96,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Build shared deps
+        run: pnpm --filter @ai-ecommerce/core --filter @ai-ecommerce/platform-alibaba1688 build
 
       - name: Test
         run: pnpm test
