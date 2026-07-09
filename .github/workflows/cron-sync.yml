@@ -1,0 +1,138 @@
+name: Data Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
+    - cron: "0 */4 * * *"
+    - cron: "0 22 * * *"
+
+permissions:
+  contents: read
+
+env:
+  FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+  DEFAULT_PRICE_ALERT_THRESHOLD: "0.08"
+
+concurrency:
+  group: data-sync-${{ github.event.schedule || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  sync-orders:
+    name: Sync platform orders
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 * * * *'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync orders
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: pnpm tsx scripts/cron/sync-orders.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          PDD_CLIENT_ID: ${{ secrets.PDD_CLIENT_ID }}
+          PDD_CLIENT_SECRET: ${{ secrets.PDD_CLIENT_SECRET }}
+          DOUYIN_APP_KEY: ${{ secrets.DOUYIN_APP_KEY }}
+          DOUYIN_APP_SECRET: ${{ secrets.DOUYIN_APP_SECRET }}
+          TAOBAO_APP_KEY: ${{ secrets.TAOBAO_APP_KEY }}
+          TAOBAO_APP_SECRET: ${{ secrets.TAOBAO_APP_SECRET }}
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Order sync failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  check-prices:
+    name: Check 1688 price and inventory
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 */4 * * *'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Check prices
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: pnpm tsx scripts/cron/check-prices.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ALIBABA_APP_KEY: ${{ secrets.ALIBABA_APP_KEY }}
+          ALIBABA_APP_SECRET: ${{ secrets.ALIBABA_APP_SECRET }}
+          ALIBABA_ACCESS_TOKEN: ${{ secrets.ALIBABA_ACCESS_TOKEN }}
+          PRICE_ALERT_THRESHOLD: ${{ vars.PRICE_ALERT_THRESHOLD || env.DEFAULT_PRICE_ALERT_THRESHOLD }}
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Price inventory check failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  daily-report:
+    name: Daily operations report
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 22 * * *'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate report
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: pnpm tsx scripts/cron/daily-report.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Daily report failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

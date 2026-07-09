@@ -1,0 +1,61 @@
+name: Trend Collection
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+
+env:
+  FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+
+concurrency:
+  group: trend-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect and analyze trends
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Collect hot searches and generate report
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 20
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm tsx scripts/cron/collect-trends.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          PDD_CLIENT_ID: ${{ secrets.PDD_CLIENT_ID }}
+          PDD_CLIENT_SECRET: ${{ secrets.PDD_CLIENT_SECRET }}
+          DOUYIN_APP_KEY: ${{ secrets.DOUYIN_APP_KEY }}
+          DOUYIN_APP_SECRET: ${{ secrets.DOUYIN_APP_SECRET }}
+          TAOBAO_APP_KEY: ${{ secrets.TAOBAO_APP_KEY }}
+          TAOBAO_APP_SECRET: ${{ secrets.TAOBAO_APP_SECRET }}
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Trend collection failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

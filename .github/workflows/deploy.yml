@@ -1,0 +1,146 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository }}
+  FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+
+jobs:
+  build-and-push:
+    name: Build and push Docker images
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [server, web]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker metadata
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME:-${GITHUB_SHA}}"
+          TAG="${TAG//\//-}"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE=${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.service }}:${TAG}" >> "$GITHUB_ENV"
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Docker image build failed" "${{ matrix.service }} ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ vars.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload compose and nginx config
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" "mkdir -p '${{ vars.DEPLOY_PATH }}'"
+          scp -i ~/.ssh/deploy_key docker-compose.prod.yml "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH }}/docker-compose.prod.yml"
+          scp -i ~/.ssh/deploy_key -r nginx "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH }}/"
+
+      - name: Write remote environment
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" <<'EOF'
+            set -euo pipefail
+            mkdir -p "${{ vars.DEPLOY_PATH }}"
+            cd "${{ vars.DEPLOY_PATH }}"
+            cat > .env <<'ENV_FILE'
+          REGISTRY=${{ env.REGISTRY }}
+          IMAGE_NAMESPACE=${{ github.repository }}
+          IMAGE_TAG=${{ needs.build-and-push.outputs.image_tag }}
+          HTTP_PORT=${{ vars.HTTP_PORT || '80' }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          POSTGRES_USER=${{ vars.POSTGRES_USER || 'ai_ecommerce' }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ vars.POSTGRES_DB || 'ai_ecommerce' }}
+          FEISHU_WEBHOOK_URL=${{ secrets.FEISHU_WEBHOOK_URL }}
+          ALIBABA_APP_KEY=${{ secrets.ALIBABA_APP_KEY }}
+          ALIBABA_APP_SECRET=${{ secrets.ALIBABA_APP_SECRET }}
+          ALIBABA_ACCESS_TOKEN=${{ secrets.ALIBABA_ACCESS_TOKEN }}
+          PDD_CLIENT_ID=${{ secrets.PDD_CLIENT_ID }}
+          PDD_CLIENT_SECRET=${{ secrets.PDD_CLIENT_SECRET }}
+          DOUYIN_APP_KEY=${{ secrets.DOUYIN_APP_KEY }}
+          DOUYIN_APP_SECRET=${{ secrets.DOUYIN_APP_SECRET }}
+          TAOBAO_APP_KEY=${{ secrets.TAOBAO_APP_KEY }}
+          TAOBAO_APP_SECRET=${{ secrets.TAOBAO_APP_SECRET }}
+          ENV_FILE
+            chmod 600 .env
+          EOF
+
+      - name: Pull and restart services
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: |
+            ssh -i ~/.ssh/deploy_key "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" <<'EOF'
+              set -euo pipefail
+              cd "${{ vars.DEPLOY_PATH }}"
+              if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+                printf '%s' "${{ secrets.GHCR_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ vars.GHCR_USERNAME || github.actor }}" --password-stdin
+              fi
+              docker compose -f docker-compose.prod.yml pull
+              docker compose -f docker-compose.prod.yml up -d --remove-orphans
+              docker image prune -f
+            EOF
+
+      - name: Notify success
+        if: success() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Deploy succeeded" "${{ github.ref_name }} deployed to ${{ github.event.inputs.environment || 'production' }}"
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "Deploy failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
