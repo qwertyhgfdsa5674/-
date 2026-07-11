@@ -35,6 +35,7 @@ type MockSource<T> = {
 
 export function createServer() {
   const app = Fastify({ logger: true });
+  const apiKey = process.env["API_KEY"];
   const sql = createDatabaseConnection();
   const trendAggregator = new TrendAggregator();
   const calendar = new EventCalendar();
@@ -45,6 +46,21 @@ export function createServer() {
 
   app.addHook("onClose", async () => {
     await sql?.end();
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (request.method !== "POST") {
+      return;
+    }
+
+    if (!apiKey) {
+      request.log.warn("API_KEY not set, auth is disabled");
+      return;
+    }
+
+    if (request.headers.authorization !== `Bearer ${apiKey}`) {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
   });
 
   app.get("/health", async () => ({
