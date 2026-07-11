@@ -23,7 +23,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^0.468.0",
-    "msw": "^2.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.6.0",
@@ -35,7 +34,8 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2"
+    "@types/react-dom": "^19.0.2",
+    "msw": "^2.15.0"
   },
   "msw": {
     "workerDirectory": [

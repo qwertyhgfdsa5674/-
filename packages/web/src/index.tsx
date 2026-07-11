@@ -17,7 +17,10 @@ const queryClient = new QueryClient({
 });
 
 async function enableMocks() {
-  if (import.meta.env.DEV) {
+  const apiBase = import.meta.env.VITE_API_BASE_URL;
+  const forceMsw = import.meta.env.VITE_ENABLE_MSW === "true";
+
+  if (import.meta.env.DEV && (!apiBase || forceMsw)) {
     const { worker } = await import("./mocks/browser");
     await worker.start({ onUnhandledRequest: "bypass" });
   }
