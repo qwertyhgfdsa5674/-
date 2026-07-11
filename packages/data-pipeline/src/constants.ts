@@ -1,0 +1,4 @@
+export const DEFAULT_DECAY_AFTER_DAYS = 7;
+export const DEFAULT_DECAY_PER_DAY = 0.08;
+export const DEFAULT_RANK_SCORE_WEIGHT = 0.75;
+export const DEFAULT_RANK_GROWTH_WEIGHT = 0.25;

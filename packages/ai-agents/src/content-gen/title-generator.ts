@@ -2,6 +2,7 @@ import type { ProductDetail } from "@ai-ecommerce/platform-alibaba1688";
 
 import { createCacheKey, InMemoryContentGenerationCache } from "./cache.js";
 import { ContentComplianceChecker } from "./compliance.js";
+import { CTR_BASE, TITLE_MAX_LENGTH } from "./constants.js";
 import {
   bestKeywords,
   cleanText,
@@ -233,7 +234,7 @@ function normalizeTitles(
 }
 
 function limitTitleLength(text: string, platform: Platform): string {
-  const maxLength = platform === "taobao" ? 60 : 30;
+  const maxLength = TITLE_MAX_LENGTH[platform];
   return text.length <= maxLength ? text : text.slice(0, maxLength);
 }
 
@@ -243,8 +244,7 @@ function estimateCtr(
   text: string,
   keywords: string[]
 ): number {
-  const base =
-    platform === "douyin" ? 0.08 : platform === "pdd" ? 0.065 : 0.055;
+  const base = CTR_BASE[platform];
   const strategyBonus: Record<TitleStrategy, number> = {
     urgency: 0.025,
     price: 0.03,

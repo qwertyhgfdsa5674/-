@@ -23,6 +23,7 @@ import {
   ComplianceInputSchema,
   ComplianceScanner
 } from "@ai-ecommerce/risk-control";
+import { DEFAULT_REDIS_URL } from "./constants.js";
 
 type Db = Sql<Record<string, never>>;
 
@@ -172,7 +173,7 @@ export async function createServer() {
   return app;
 }
 
-export function createDefaultQueue(redisUrl = "redis://localhost:6379") {
+export function createDefaultQueue(redisUrl = DEFAULT_REDIS_URL) {
   return new Queue("ai-ecommerce-jobs", {
     connection: {
       url: redisUrl

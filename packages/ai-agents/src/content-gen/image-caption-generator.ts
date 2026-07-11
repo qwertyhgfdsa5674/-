@@ -2,6 +2,7 @@ import type { ProductDetail } from "@ai-ecommerce/platform-alibaba1688";
 
 import { createCacheKey, InMemoryContentGenerationCache } from "./cache.js";
 import { ContentComplianceChecker } from "./compliance.js";
+import { IMAGE_CAPTION_DEFAULT_MAX_TOKENS } from "./constants.js";
 import { minPrice, sellingPoints } from "./product-utils.js";
 import { ImageCaptionSchema } from "./schemas.js";
 import { DailyTokenBudgetController } from "./token-budget.js";
@@ -71,7 +72,7 @@ export class ImageCaptionGenerator {
         price: minPrice(context),
         sellingPoints: sellingPoints(context)
       }),
-      maxOutputTokens: 300
+      maxOutputTokens: IMAGE_CAPTION_DEFAULT_MAX_TOKENS
     });
 
     this.budget.record(result.usage);

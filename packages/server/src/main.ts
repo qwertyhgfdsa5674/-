@@ -1,7 +1,8 @@
 import { createServer } from "./index.js";
+import { DEFAULT_HOST, DEFAULT_PORT } from "./constants.js";
 
-const port = Number(process.env["PORT"] ?? "3000");
-const host = process.env["HOST"] ?? "0.0.0.0";
+const port = Number(process.env["PORT"] ?? DEFAULT_PORT);
+const host = process.env["HOST"] ?? DEFAULT_HOST;
 const app = await createServer();
 
 try {

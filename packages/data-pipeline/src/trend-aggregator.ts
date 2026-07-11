@@ -4,6 +4,12 @@ import {
   type TrendItem,
   type TrendStorageRecord
 } from "./schemas.js";
+import {
+  DEFAULT_DECAY_AFTER_DAYS,
+  DEFAULT_DECAY_PER_DAY,
+  DEFAULT_RANK_GROWTH_WEIGHT,
+  DEFAULT_RANK_SCORE_WEIGHT
+} from "./constants.js";
 import type { TrendSource } from "./sources.js";
 
 export interface TrendRepository {
@@ -49,8 +55,8 @@ export class TrendAggregator {
     private readonly repository: TrendRepository = new InMemoryTrendRepository(),
     options: TrendAggregatorOptions = {}
   ) {
-    this.decayAfterDays = options.decayAfterDays ?? 7;
-    this.decayPerDay = options.decayPerDay ?? 0.08;
+    this.decayAfterDays = options.decayAfterDays ?? DEFAULT_DECAY_AFTER_DAYS;
+    this.decayPerDay = options.decayPerDay ?? DEFAULT_DECAY_PER_DAY;
   }
 
   public async collectAndAggregate(
@@ -110,8 +116,12 @@ export class TrendAggregator {
     }
 
     return output.sort((left, right) => {
-      const leftRank = left.score * 0.75 + left.growthRate * 100 * 0.25;
-      const rightRank = right.score * 0.75 + right.growthRate * 100 * 0.25;
+      const leftRank =
+        left.score * DEFAULT_RANK_SCORE_WEIGHT +
+        left.growthRate * 100 * DEFAULT_RANK_GROWTH_WEIGHT;
+      const rightRank =
+        right.score * DEFAULT_RANK_SCORE_WEIGHT +
+        right.growthRate * 100 * DEFAULT_RANK_GROWTH_WEIGHT;
       return rightRank - leftRank;
     });
   }

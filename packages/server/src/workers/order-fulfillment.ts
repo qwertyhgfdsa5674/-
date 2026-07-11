@@ -9,6 +9,8 @@ import pino from "pino";
 import type postgres from "postgres";
 import { z } from "zod";
 
+import { DEFAULT_MAX_RETRIES, DEFAULT_REDIS_URL } from "../constants.js";
+
 export const FulfillmentStatusSchema = z.enum([
   "NEW",
   "SOURCING",
@@ -147,8 +149,8 @@ export interface StructuredLogger {
 
 const DEFAULT_TRACKING_TIMEOUT_MS = 48 * 60 * 60 * 1000;
 const DEFAULT_TRACKING_POLL_INTERVAL_MS = 30 * 60 * 1000;
-const DEFAULT_PURCHASE_MAX_ATTEMPTS = 3;
-const DEFAULT_JOB_MAX_RETRIES = 3;
+const DEFAULT_PURCHASE_MAX_ATTEMPTS = DEFAULT_MAX_RETRIES;
+const DEFAULT_JOB_MAX_RETRIES = DEFAULT_MAX_RETRIES;
 
 const VALID_TRANSITIONS: Record<FulfillmentStatus, FulfillmentStatus[]> = {
   NEW: ["SOURCING", "FAILED"],
@@ -191,7 +193,7 @@ export class OrderFulfillmentWorker {
       lockDuration: 120_000,
       connection: options.workerOptions?.connection ??
         queue.opts.connection ?? {
-          url: process.env["REDIS_URL"] ?? "redis://localhost:6379"
+          url: process.env["REDIS_URL"] ?? DEFAULT_REDIS_URL
         },
       ...options.workerOptions
     };
@@ -556,7 +558,7 @@ export class RedisOrderStateStore implements OrderStateStore {
   private readonly redis: Redis;
 
   public constructor(
-    redisUrl = process.env["REDIS_URL"] ?? "redis://localhost:6379",
+    redisUrl = process.env["REDIS_URL"] ?? DEFAULT_REDIS_URL,
     redis?: Redis
   ) {
     this.redis = redis ?? new Redis(redisUrl);

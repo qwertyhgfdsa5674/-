@@ -1,8 +1,7 @@
 import { createHash } from "crypto";
 
+import { CACHE_TTL_MS } from "./constants.js";
 import type { ContentGenerationCache } from "./types.js";
-
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface CacheEntry<T> {
   value: T;
@@ -27,7 +26,7 @@ export class InMemoryContentGenerationCache implements ContentGenerationCache {
     return entry.value as T;
   }
 
-  public set<T>(key: string, value: T, ttlMs = DEFAULT_TTL_MS): void {
+  public set<T>(key: string, value: T, ttlMs = CACHE_TTL_MS): void {
     this.entries.set(key, {
       value,
       expiresAt: Date.now() + ttlMs

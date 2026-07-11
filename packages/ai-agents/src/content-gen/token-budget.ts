@@ -3,6 +3,7 @@ import type {
   TokenBudgetController,
   TokenUsage
 } from "./types.js";
+import { TOKEN_ESTIMATE_RATIO } from "./constants.js";
 
 export class DailyTokenBudgetController implements TokenBudgetController {
   private usage: TokenUsage = {
@@ -54,5 +55,5 @@ export class DailyTokenBudgetController implements TokenBudgetController {
 }
 
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 2);
+  return Math.ceil(text.length * TOKEN_ESTIMATE_RATIO);
 }

@@ -2,6 +2,7 @@ import type { ProductDetail } from "@ai-ecommerce/platform-alibaba1688";
 
 import { createCacheKey, InMemoryContentGenerationCache } from "./cache.js";
 import { ContentComplianceChecker } from "./compliance.js";
+import { DESCRIPTIONS_DEFAULT_MAX_OUTPUT_TOKENS } from "./constants.js";
 import {
   escapeHtml,
   minPrice,
@@ -92,7 +93,7 @@ export class DescriptionGenerator {
       temperature: template.temperature,
       system: template.system,
       user: template.user,
-      maxOutputTokens: 1600
+      maxOutputTokens: DESCRIPTIONS_DEFAULT_MAX_OUTPUT_TOKENS
     });
 
     this.budget.record(result.usage);
