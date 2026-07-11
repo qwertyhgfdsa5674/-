@@ -131,9 +131,14 @@ importers:
 
   packages/platforms/alibaba1688:
     dependencies:
+      '@ai-ecommerce/platform-common':
+        specifier: workspace:*
+        version: link:../common
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+
+  packages/platforms/common: {}
 
   packages/platforms/douyin:
     dependencies:
@@ -143,6 +148,9 @@ importers:
 
   packages/platforms/pdd:
     dependencies:
+      '@ai-ecommerce/platform-common':
+        specifier: workspace:*
+        version: link:../common
       zod:
         specifier: ^3.24.1
         version: 3.25.76
