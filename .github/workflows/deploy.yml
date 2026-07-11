@@ -130,7 +130,7 @@ jobs:
       - name: Pull images on server
         timeout-minutes: 20
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<EOF
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<EOF
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
@@ -139,11 +139,29 @@ jobs:
               attempt=1
               while [ "\$attempt" -le 5 ]; do
                 echo "Pulling \${image} (attempt \${attempt}/5)..."
-                if timeout --kill-after=30s 6m docker pull "\${image}"; then
+                log_file="pull-\${attempt}.log"
+                rm -f "\${log_file}"
+                (
+                  while true; do
+                    sleep 20
+                    echo "Still pulling \${image}..."
+                  done
+                ) &
+                heartbeat_pid="\$!"
+                status=0
+                timeout --kill-after=30s 6m docker pull "\${image}" > "\${log_file}" 2>&1 || status="\$?"
+                kill "\${heartbeat_pid}" 2>/dev/null || true
+                wait "\${heartbeat_pid}" 2>/dev/null || true
+                if [ "\${status}" -eq 0 ]; then
+                  cat "\${log_file}"
                   return 0
                 fi
+                cat "\${log_file}"
+                echo "Pull failed for \${image} with exit code \${status}"
                 attempt=\$((attempt + 1))
-                sleep 10
+                if [ "\$attempt" -le 5 ]; then
+                  sleep 20
+                fi
               done
               return 1
             }
