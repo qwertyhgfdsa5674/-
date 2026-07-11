@@ -32,7 +32,7 @@ export class ProductScorer {
     );
   }
 
-  public async score(input: ProductScoreInput): Promise<ProductScoreOutput> {
+  public score(input: ProductScoreInput): ProductScoreOutput {
     const parsedInput = ProductScoreInputSchema.parse(input);
     const dimensionScores = this.scoreDimensions(parsedInput);
     const totalScore = roundScore(
@@ -55,7 +55,7 @@ export class ProductScorer {
   public async batchScore(
     inputs: ProductScoreInput[]
   ): Promise<ProductScoreOutput[]> {
-    const scored = await Promise.all(inputs.map((input) => this.score(input)));
+    const scored = inputs.map((input) => this.score(input));
     const sorted = [...scored].sort(
       (left, right) => right.totalScore - left.totalScore
     );
