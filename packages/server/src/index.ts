@@ -1,4 +1,5 @@
 import { Queue } from "bullmq";
+import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import postgres, { type Sql } from "postgres";
 import { z } from "zod";
@@ -33,7 +34,7 @@ type MockSource<T> = {
   sourceType: "mock";
 } & T;
 
-export function createServer() {
+export async function createServer() {
   const app = Fastify({ logger: true });
   const apiKey = process.env["API_KEY"];
   const sql = createDatabaseConnection();
@@ -61,6 +62,11 @@ export function createServer() {
     if (request.headers.authorization !== `Bearer ${apiKey}`) {
       return reply.status(401).send({ error: "Unauthorized" });
     }
+  });
+
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: "1 minute"
   });
 
   app.get("/health", async () => ({
