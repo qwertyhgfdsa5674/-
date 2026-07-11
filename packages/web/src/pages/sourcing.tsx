@@ -29,7 +29,8 @@ export function SourcingPage() {
   }, [query.data?.results, selectedIds]);
 
   if (query.isLoading) return <LoadingState />;
-  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  if (query.isError)
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   if (!query.data) return <EmptyState />;
 
   const toggleSelected = (product: SourcingProduct) => {

@@ -47,7 +47,8 @@ export function ProductsPage() {
   }, [platform, query.data, search, sort, status]);
 
   if (query.isLoading) return <LoadingState />;
-  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  if (query.isError)
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
 
   return (
     <PageShell

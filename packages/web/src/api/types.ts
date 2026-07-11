@@ -116,3 +116,26 @@ export interface AnalyticsData {
     profit: number;
   }>;
 }
+
+export interface DataHealthTable {
+  table: string;
+  status: "ok" | "empty" | "missing" | "error";
+  rowCount: number | null;
+  error?: string;
+}
+
+export interface DataHealth {
+  sourceType: "database" | "mock";
+  database: {
+    configured: boolean;
+    connected: boolean;
+    status: "ok" | "unconfigured" | "error";
+    error?: string;
+  };
+  tables: DataHealthTable[];
+  summary: {
+    emptyTables: number;
+    missingTables: number;
+    errorTables: number;
+  };
+}

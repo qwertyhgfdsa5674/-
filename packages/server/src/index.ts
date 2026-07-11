@@ -38,6 +38,44 @@ type MockSource<T> = {
   sourceType: "mock";
 } & T;
 
+interface DataHealthTable {
+  table: string;
+  status: "ok" | "empty" | "missing" | "error";
+  rowCount: number | null;
+  error?: string;
+}
+
+interface DataHealth {
+  sourceType: "database" | "mock";
+  database: {
+    configured: boolean;
+    connected: boolean;
+    status: "ok" | "unconfigured" | "error";
+    error?: string;
+  };
+  tables: DataHealthTable[];
+  summary: {
+    emptyTables: number;
+    missingTables: number;
+    errorTables: number;
+  };
+}
+
+const HEALTH_CHECK_TABLES = [
+  "products",
+  "suppliers",
+  "orders",
+  "pricing",
+  "listing_tasks",
+  "price_history",
+  "compliance_checks",
+  "ab_tests",
+  "inventory_alerts",
+  "review_insights",
+  "supplier_alternatives",
+  "supplier_performance"
+];
+
 export async function createServer(config: AppConfig = loadConfig()) {
   const app = Fastify({
     logger: {
@@ -102,6 +140,60 @@ export async function createServer(config: AppConfig = loadConfig()) {
       queue: "configured"
     }
   }));
+
+  app.get(
+    "/api/diagnostics/data-health",
+    {
+      schema: {
+        description: "Inspect database connectivity and core table population.",
+        tags: ["diagnostics"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              sourceType: { type: "string", enum: ["database", "mock"] },
+              database: {
+                type: "object",
+                properties: {
+                  configured: { type: "boolean" },
+                  connected: { type: "boolean" },
+                  status: {
+                    type: "string",
+                    enum: ["ok", "unconfigured", "error"]
+                  },
+                  error: { type: "string" }
+                },
+                required: ["configured", "connected", "status"]
+              },
+              tables: { type: "array" },
+              summary: {
+                type: "object",
+                properties: {
+                  emptyTables: { type: "number" },
+                  missingTables: { type: "number" },
+                  errorTables: { type: "number" }
+                },
+                required: ["emptyTables", "missingTables", "errorTables"]
+              }
+            },
+            required: ["sourceType", "database", "tables", "summary"]
+          }
+        }
+      }
+    },
+    async (request) => {
+      const health = await queryDataHealth(sql);
+      request.log.info(
+        {
+          sourceType: health.sourceType,
+          databaseStatus: health.database.status,
+          summary: health.summary
+        },
+        "data health checked"
+      );
+      return health;
+    }
+  );
 
   app.get("/api/trends", async () => {
     const trends = await trendAggregator.collectAndAggregate(
@@ -210,6 +302,111 @@ function createDatabaseConnection(): Db | undefined {
   return postgres(databaseUrl, { max: 5 });
 }
 
+async function queryDataHealth(sql: Db | undefined): Promise<DataHealth> {
+  if (!sql) {
+    return {
+      sourceType: "mock",
+      database: {
+        configured: false,
+        connected: false,
+        status: "unconfigured"
+      },
+      tables: HEALTH_CHECK_TABLES.map((table) => ({
+        table,
+        status: "missing",
+        rowCount: null
+      })),
+      summary: {
+        emptyTables: 0,
+        missingTables: HEALTH_CHECK_TABLES.length,
+        errorTables: 0
+      }
+    };
+  }
+
+  try {
+    await sql`select 1`;
+  } catch (error) {
+    return {
+      sourceType: "mock",
+      database: {
+        configured: true,
+        connected: false,
+        status: "error",
+        error: errorMessage(error)
+      },
+      tables: HEALTH_CHECK_TABLES.map((table) => ({
+        table,
+        status: "error",
+        rowCount: null,
+        error: "Database connection failed"
+      })),
+      summary: {
+        emptyTables: 0,
+        missingTables: 0,
+        errorTables: HEALTH_CHECK_TABLES.length
+      }
+    };
+  }
+
+  const tables = await Promise.all(
+    HEALTH_CHECK_TABLES.map((table) => queryTableHealth(sql, table))
+  );
+
+  return {
+    sourceType: "database",
+    database: {
+      configured: true,
+      connected: true,
+      status: "ok"
+    },
+    tables,
+    summary: {
+      emptyTables: tables.filter((table) => table.status === "empty").length,
+      missingTables: tables.filter((table) => table.status === "missing")
+        .length,
+      errorTables: tables.filter((table) => table.status === "error").length
+    }
+  };
+}
+
+async function queryTableHealth(
+  sql: Db,
+  table: string
+): Promise<DataHealthTable> {
+  try {
+    const [exists] = await sql<{ exists: boolean }[]>`
+      select to_regclass(${`public.${table}`}) is not null as exists
+    `;
+
+    if (!exists?.exists) {
+      return {
+        table,
+        status: "missing",
+        rowCount: null
+      };
+    }
+
+    const [row] = await sql<{ row_count: string }[]>`
+      select count(*)::text as row_count from ${sql(table)}
+    `;
+    const rowCount = Number(row?.row_count ?? 0);
+
+    return {
+      table,
+      status: rowCount > 0 ? "ok" : "empty",
+      rowCount
+    };
+  } catch (error) {
+    return {
+      table,
+      status: "error",
+      rowCount: null,
+      error: errorMessage(error)
+    };
+  }
+}
+
 async function withDatabaseFallback<T>(
   app: ReturnType<typeof Fastify>,
   route: string,
@@ -233,6 +430,10 @@ async function withDatabaseFallback<T>(
     );
     return { sourceType: "mock", ...fallback() };
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function queryDashboard(sql: Db): Promise<{

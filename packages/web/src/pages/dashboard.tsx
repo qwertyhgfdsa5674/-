@@ -31,7 +31,8 @@ export function DashboardPage() {
   const query = useDashboard();
 
   if (query.isLoading) return <LoadingState />;
-  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  if (query.isError)
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   if (!query.data) return <EmptyState />;
 
   const metrics = Object.values(query.data.metrics);

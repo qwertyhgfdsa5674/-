@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getJson } from "../api/client";
 import type {
   AnalyticsData,
+  DataHealth,
   DashboardData,
   Order,
   Product,
@@ -59,5 +60,14 @@ export function useAnalytics(range: "day" | "week" | "month") {
   return useQuery({
     queryKey: ["analytics", range],
     queryFn: () => getJson<AnalyticsData>(`/api/analytics?range=${range}`)
+  });
+}
+
+export function useDataHealth() {
+  return useQuery({
+    queryKey: ["data-health"],
+    queryFn: () => getJson<DataHealth>("/api/diagnostics/data-health"),
+    refetchInterval: 60_000,
+    retry: 1
   });
 }

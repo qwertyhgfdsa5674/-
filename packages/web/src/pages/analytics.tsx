@@ -29,7 +29,8 @@ export function AnalyticsPage() {
   const query = useAnalytics(range);
 
   if (query.isLoading) return <LoadingState />;
-  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  if (query.isError)
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   if (!query.data) return <EmptyState />;
 
   return (

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Package,
   Search,
+  Server,
   ShoppingCart,
   Store,
   SunMoon,
@@ -14,7 +15,10 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
+import type { DataHealth } from "../../api/types";
+import { useDataHealth } from "../../hooks/use-commerce-data";
 import { cn } from "../../lib/utils";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
 const navItems = [
@@ -26,6 +30,7 @@ const navItems = [
 ];
 
 export function AppLayout() {
+  const dataHealth = useDataHealth();
   const [dark, setDark] = useState(() =>
     document.documentElement.classList.contains("dark")
   );
@@ -95,6 +100,14 @@ export function AppLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Badge tone={healthTone(dataHealth.data, dataHealth.isError)}>
+              <Server className="mr-1 h-3.5 w-3.5" />
+              {healthLabel(
+                dataHealth.data,
+                dataHealth.isLoading,
+                dataHealth.isError
+              )}
+            </Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -119,4 +132,29 @@ export function AppLayout() {
       </div>
     </div>
   );
+}
+
+function healthTone(health: DataHealth | undefined, isError: boolean) {
+  if (isError || health?.database.status === "error") return "danger";
+  if (!health || health.database.status === "unconfigured") return "warning";
+  if (health.summary.errorTables > 0 || health.summary.missingTables > 0) {
+    return "warning";
+  }
+  if (health.summary.emptyTables > 0) return "info";
+  return "success";
+}
+
+function healthLabel(
+  health: DataHealth | undefined,
+  isLoading: boolean,
+  isError: boolean
+) {
+  if (isLoading) return "Data check";
+  if (isError) return "API down";
+  if (!health) return "Unknown";
+  if (health.database.status === "unconfigured") return "Mock mode";
+  if (health.database.status === "error") return "DB error";
+  if (health.summary.missingTables > 0) return "Schema missing";
+  if (health.summary.emptyTables > 0) return "DB empty";
+  return "DB ok";
 }
