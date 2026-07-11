@@ -1,7 +1,10 @@
-import Fastify from "fastify";
 import { Queue } from "bullmq";
-import { createIdempotencyKey } from "@ai-ecommerce/core";
+import Fastify from "fastify";
+import postgres, { type Sql } from "postgres";
+import { z } from "zod";
+
 import { AbTestAnalyzer, ContentVariantSchema } from "@ai-ecommerce/ab-test";
+import { createIdempotencyKey } from "@ai-ecommerce/core";
 import {
   createDefaultTrendSources,
   EventCalendar,
@@ -19,16 +22,30 @@ import {
   ComplianceInputSchema,
   ComplianceScanner
 } from "@ai-ecommerce/risk-control";
-import { z } from "zod";
+
+type Db = Sql<Record<string, never>>;
+
+type DatabaseSource<T> = {
+  sourceType: "database";
+} & T;
+
+type MockSource<T> = {
+  sourceType: "mock";
+} & T;
 
 export function createServer() {
   const app = Fastify({ logger: true });
+  const sql = createDatabaseConnection();
   const trendAggregator = new TrendAggregator();
   const calendar = new EventCalendar();
   const pricing = new DynamicPricingEngine();
   const inventory = new InventoryPlanner();
   const compliance = new ComplianceScanner();
   const abTests = new AbTestAnalyzer();
+
+  app.addHook("onClose", async () => {
+    await sql?.end();
+  });
 
   app.get("/health", async () => ({
     ok: true,
@@ -43,7 +60,11 @@ export function createServer() {
     const trends = await trendAggregator.collectAndAggregate(
       createDefaultTrendSources()
     );
-    return { sourceType: "mock", trends };
+
+    return {
+      sourceType: "mock" as const,
+      trends
+    };
   });
 
   app.get("/api/events", async () => ({
@@ -51,15 +72,47 @@ export function createServer() {
     upcoming: calendar.upcoming()
   }));
 
-  app.get("/api/dashboard", async () => mockDashboard());
+  app.get("/api/dashboard", async () => {
+    return withDatabaseFallback(app, "dashboard", sql, queryDashboard, mockDashboard);
+  });
 
-  app.get("/api/products", async () => mockProducts());
+  app.get("/api/products", async () => {
+    const result = await withDatabaseFallback(
+      app,
+      "products",
+      sql,
+      queryProducts,
+      () => ({ products: mockProducts() })
+    );
 
-  app.get("/api/orders", async () => mockOrders());
+    return {
+      sourceType: result.sourceType,
+      products: result.products
+    };
+  });
 
-  app.get("/api/sourcing", async () => mockSourcing());
+  app.get("/api/orders", async () => {
+    const result = await withDatabaseFallback(
+      app,
+      "orders",
+      sql,
+      queryOrders,
+      () => ({ orders: mockOrders() })
+    );
 
-  app.get("/api/analytics", async () => mockAnalytics());
+    return {
+      sourceType: result.sourceType,
+      orders: result.orders
+    };
+  });
+
+  app.get("/api/sourcing", async () => {
+    return withDatabaseFallback(app, "sourcing", sql, querySourcing, mockSourcing);
+  });
+
+  app.get("/api/analytics", async () => {
+    return withDatabaseFallback(app, "analytics", sql, queryAnalytics, mockAnalytics);
+  });
 
   app.post("/api/pricing/recommend", async (request) => {
     const body = PricingInputSchema.parse(request.body);
@@ -100,7 +153,442 @@ export function createDefaultQueue(redisUrl = "redis://localhost:6379") {
 export { createIdempotencyKey };
 export * from "./workers/order-fulfillment.js";
 
-function mockDashboard() {
+function createDatabaseConnection(): Db | undefined {
+  const databaseUrl = process.env["DATABASE_URL"];
+
+  if (!databaseUrl) {
+    return undefined;
+  }
+
+  return postgres(databaseUrl, { max: 5 });
+}
+
+async function withDatabaseFallback<T>(
+  app: ReturnType<typeof Fastify>,
+  route: string,
+  sql: Db | undefined,
+  query: (db: Db) => Promise<T>,
+  fallback: () => T
+): Promise<DatabaseSource<T> | MockSource<T>> {
+  if (!sql) {
+    return { sourceType: "mock", ...fallback() };
+  }
+
+  try {
+    return {
+      sourceType: "database",
+      ...(await query(sql))
+    };
+  } catch (error) {
+    app.log.warn(
+      { err: error, route },
+      `${route} query failed, using mock data`
+    );
+    return { sourceType: "mock", ...fallback() };
+  }
+}
+
+async function queryDashboard(sql: Db): Promise<{
+  metrics: {
+    todayOrders: MetricCard;
+    todaySales: MetricCard;
+    activeProducts: MetricCard;
+    profit: MetricCard;
+  };
+  salesTrend: SalesPoint[];
+  pendingOrders: Order[];
+  inventoryAlerts: Product[];
+}> {
+  const [metricRow] = await sql<{
+    today_orders: string;
+    today_sales: string;
+    active_products: string;
+    profit: string;
+    pending_orders: string;
+    inventory_alerts: string;
+  }[]>`
+    select
+      count(*) filter (where o.created_at >= now() - interval '1 day')::text as today_orders,
+      coalesce(sum(o.quantity * p.list_price_cents), 0)::text as today_sales,
+      count(distinct pr.product_id)::text as active_products,
+      coalesce(sum(o.quantity * (p.list_price_cents - p.cost_cents)) filter (where o.status = 'fulfilled' and o.created_at >= now() - interval '1 day'), 0)::text as profit,
+      count(*) filter (where o.status in ('pending', 'paid'))::text as pending_orders,
+      count(*) filter (where ia.resolved = false)::text as inventory_alerts
+    from products pr
+    left join pricing p on p.product_id = pr.id
+    left join orders o on o.product_id = pr.id
+    left join inventory_alerts ia on ia.product_id = pr.id
+  `;
+
+  const salesTrend = await querySalesTrend(sql);
+  const pendingOrders = (await queryOrders(sql)).orders.slice(0, 2);
+  const inventoryAlerts = await queryInventoryAlerts(sql);
+
+  return {
+    metrics: {
+      todayOrders: {
+        label: "Today orders",
+        value: Number(metricRow?.today_orders ?? 0),
+        delta: 12
+      },
+      todaySales: {
+        label: "Today GMV",
+        value: Number(metricRow?.today_sales ?? 0),
+        delta: 8
+      },
+      activeProducts: {
+        label: "Active products",
+        value: Number(metricRow?.active_products ?? 0),
+        delta: 3
+      },
+      profit: {
+        label: "Profit",
+        value: Number(metricRow?.profit ?? 0),
+        delta: 5
+      }
+    },
+    salesTrend,
+    pendingOrders,
+    inventoryAlerts
+  };
+}
+
+async function queryProducts(sql: Db): Promise<{ products: Product[] }> {
+  const rows = await sql<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    source_url: string | null;
+    updated_at: Date;
+    cost_cents: number | null;
+    list_price_cents: number | null;
+  }[]>`
+    select
+      p.id::text as id,
+      p.title,
+      p.description,
+      p.status,
+      p.source_url,
+      p.updated_at,
+      pr.cost_cents,
+      pr.list_price_cents
+    from products p
+    left join pricing pr on pr.product_id = p.id
+    order by p.updated_at desc
+  `;
+
+  return {
+    products: rows.map((row, index) => ({
+      id: row.id,
+      image: productImage(index),
+      title: row.title,
+      platform: "douyin",
+      price: Math.round((row.list_price_cents ?? 0) / 100),
+      cost: Math.round((row.cost_cents ?? 0) / 100),
+      stock: 0,
+      status: mapProductStatus(row.status),
+      links: {},
+      category: row.description?.slice(0, 24) || "general",
+      updatedAt: row.updated_at.toISOString()
+    }))
+  };
+}
+
+async function queryOrders(sql: Db): Promise<{ orders: Order[] }> {
+  const rows = await sql<{
+    id: string;
+    platform: string;
+    external_order_id: string;
+    quantity: number;
+    status: string;
+    created_at: Date;
+    title: string | null;
+    list_price_cents: number | null;
+    cost_cents: number | null;
+  }[]>`
+    select
+      o.id::text as id,
+      o.platform,
+      o.external_order_id,
+      o.quantity,
+      o.status,
+      o.created_at,
+      p.title,
+      pr.list_price_cents,
+      pr.cost_cents
+    from orders o
+    left join products p on p.id = o.product_id
+    left join pricing pr on pr.product_id = o.product_id
+    order by o.created_at desc
+    limit 50
+  `;
+
+  return {
+    orders: rows.map((row) => {
+      const amount = Math.round(
+        (row.list_price_cents ?? 0) * row.quantity / 100
+      );
+      const profit = Math.round(
+        ((row.list_price_cents ?? 0) - (row.cost_cents ?? 0)) * row.quantity / 100
+      );
+
+      return {
+        id: row.id,
+        platform: normalizePlatform(row.platform),
+        buyer: row.external_order_id,
+        phone: "[REDACTED]",
+        address: "[REDACTED]",
+        productTitle: row.title ?? "Unknown product",
+        amount,
+        profit,
+        status: mapOrderStatus(row.status),
+        trackingNumber: undefined,
+        logisticsCompany: undefined,
+        createdAt: row.created_at.toISOString(),
+        timeline: [
+          {
+            status: mapOrderStatus(row.status),
+            at: row.created_at.toISOString(),
+            description: "Loaded from PostgreSQL."
+          }
+        ]
+      };
+    })
+  };
+}
+
+async function querySourcing(sql: Db): Promise<{
+  trend: SalesPoint[];
+  keywords: KeywordTrend[];
+  results: SourcingProduct[];
+}> {
+  const [trend, keywords, products] = await Promise.all([
+    querySalesTrend(sql),
+    queryTrendKeywords(sql),
+    sql<{
+      id: string;
+      title: string;
+      cost_cents: number | null;
+      list_price_cents: number | null;
+      updated_at: Date;
+    }[]>`
+      select
+        p.id::text as id,
+        p.title,
+        pr.cost_cents,
+        pr.list_price_cents,
+        p.updated_at
+      from products p
+      left join pricing pr on pr.product_id = p.id
+      order by p.updated_at desc
+      limit 12
+    `
+  ]);
+
+  return {
+    trend,
+    keywords,
+    results: products.map((product, index) => ({
+      id: product.id,
+      image: productImage(index),
+      title: product.title,
+      price: Math.round((product.cost_cents ?? 0) / 100),
+      monthlySales: 0,
+      supplier: "PostgreSQL",
+      score: 50,
+      profitMargin:
+        product.list_price_cents && product.cost_cents
+          ? (product.list_price_cents - product.cost_cents) /
+            Math.max(product.list_price_cents, 1)
+          : 0,
+      stock: 0,
+      tags: ["database"],
+      details: {
+        priceCompetitiveness: 50,
+        supplierReliability: 50,
+        productQuality: 50,
+        fulfillmentCapability: 50,
+        profitMargin: 50
+      }
+    }))
+  };
+}
+
+async function queryAnalytics(sql: Db): Promise<{
+  salesTrend: SalesPoint[];
+  productRanking: Array<{ title: string; sales: number; revenue: number }>;
+  platformShare: Array<{ platform: "douyin" | "pdd" | "taobao"; value: number }>;
+  profitReport: Array<{ date: string; revenue: number; cost: number; profit: number }>;
+}> {
+  const [salesTrend, productRanking, platformShare, profitReport] =
+    await Promise.all([
+      querySalesTrend(sql),
+      sql<{
+        title: string;
+        sales: string;
+        revenue: string;
+      }[]>`
+        select
+          coalesce(p.title, 'Unknown product') as title,
+          sum(o.quantity)::text as sales,
+          coalesce(sum(o.quantity * coalesce(pr.list_price_cents, 0)), 0)::text as revenue
+        from orders o
+        left join products p on p.id = o.product_id
+        left join pricing pr on pr.product_id = o.product_id
+        group by p.title
+        order by revenue desc
+        limit 10
+      `,
+      sql<{
+        platform: string;
+        value: string;
+      }[]>`
+        select
+          o.platform,
+          count(*)::text as value
+        from orders o
+        group by o.platform
+      `,
+      sql<{
+        date: string;
+        revenue: string;
+        cost: string;
+        profit: string;
+      }[]>`
+        select
+          to_char(o.created_at::date, 'YYYY-MM-DD') as date,
+          coalesce(sum(o.quantity * coalesce(pr.list_price_cents, 0)), 0)::text as revenue,
+          coalesce(sum(o.quantity * coalesce(pr.cost_cents, 0)), 0)::text as cost,
+          coalesce(sum(o.quantity * (coalesce(pr.list_price_cents, 0) - coalesce(pr.cost_cents, 0))), 0)::text as profit
+        from orders o
+        left join pricing pr on pr.product_id = o.product_id
+        group by o.created_at::date
+        order by date desc
+        limit 7
+      `
+    ]);
+
+  return {
+    salesTrend,
+    productRanking: productRanking.map((item) => ({
+      title: item.title,
+      sales: Number(item.sales ?? 0),
+      revenue: Number(item.revenue ?? 0)
+    })),
+    platformShare: platformShare.map((item) => ({
+      platform: normalizePlatform(item.platform),
+      value: Number(item.value ?? 0)
+    })),
+    profitReport: profitReport.map((item) => ({
+      date: item.date,
+      revenue: Number(item.revenue ?? 0),
+      cost: Number(item.cost ?? 0),
+      profit: Number(item.profit ?? 0)
+    }))
+  };
+}
+
+async function querySalesTrend(sql: Db): Promise<SalesPoint[]> {
+  const rows = await sql<{
+    date: string;
+    douyin: string;
+    pdd: string;
+    taobao: string;
+    total: string;
+    profit: string;
+  }[]>`
+    select
+      coalesce(to_char(o.created_at::date, 'YYYY-MM-DD'), to_char(now()::date, 'YYYY-MM-DD')) as date,
+      coalesce(sum(case when o.platform = 'douyin' then o.quantity * coalesce(pr.list_price_cents, 0) else 0 end), 0)::text as douyin,
+      coalesce(sum(case when o.platform = 'pdd' then o.quantity * coalesce(pr.list_price_cents, 0) else 0 end), 0)::text as pdd,
+      coalesce(sum(case when o.platform = 'taobao' then o.quantity * coalesce(pr.list_price_cents, 0) else 0 end), 0)::text as taobao,
+      coalesce(sum(o.quantity * coalesce(pr.list_price_cents, 0)), 0)::text as total,
+      coalesce(sum(o.quantity * (coalesce(pr.list_price_cents, 0) - coalesce(pr.cost_cents, 0))), 0)::text as profit
+    from orders o
+    left join pricing pr on pr.product_id = o.product_id
+    where o.created_at >= now() - interval '7 days'
+    group by o.created_at::date
+    order by date asc
+  `;
+
+  return rows.map((row) => ({
+    date: row.date,
+    douyin: Number(row.douyin ?? 0),
+    pdd: Number(row.pdd ?? 0),
+    taobao: Number(row.taobao ?? 0),
+    total: Number(row.total ?? 0),
+    profit: Number(row.profit ?? 0)
+  }));
+}
+
+async function queryTrendKeywords(sql: Db): Promise<KeywordTrend[]> {
+  const rows = await sql<{
+    keyword: string;
+    score: number;
+    growth_rate: number | null;
+  }[]>`
+    select keyword, score, growth_rate
+    from trends
+    order by score desc, keyword asc
+    limit 8
+  `;
+
+  return rows.map((row) => ({
+    keyword: row.keyword,
+    searchVolume: Math.max(row.score, 0) * 1000,
+    growth: row.growth_rate ?? 0
+  }));
+}
+
+async function queryInventoryAlerts(sql: Db): Promise<Product[]> {
+  const rows = await sql<{
+    id: string;
+    title: string;
+    platform: string;
+    cost_cents: number | null;
+    list_price_cents: number | null;
+  }[]>`
+    select
+      p.id::text as id,
+      p.title,
+      'douyin' as platform,
+      pr.cost_cents,
+      pr.list_price_cents
+    from inventory_alerts ia
+    join products p on p.id = ia.product_id
+    left join pricing pr on pr.product_id = p.id
+    where ia.resolved = false
+    order by ia.created_at desc
+    limit 8
+  `;
+
+  return rows.map((row, index) => ({
+    id: row.id,
+    image: productImage(index),
+    title: row.title,
+    platform: normalizePlatform(row.platform),
+    price: Math.round((row.list_price_cents ?? 0) / 100),
+    cost: Math.round((row.cost_cents ?? 0) / 100),
+    stock: 0,
+    status: "paused",
+    links: {},
+    category: "database",
+    updatedAt: new Date().toISOString()
+  }));
+}
+
+function mockDashboard(): {
+  metrics: {
+    todayOrders: MetricCard;
+    todaySales: MetricCard;
+    activeProducts: MetricCard;
+    profit: MetricCard;
+  };
+  salesTrend: SalesPoint[];
+  pendingOrders: Order[];
+  inventoryAlerts: Product[];
+} {
   return {
     metrics: {
       todayOrders: { label: "Today orders", value: 238, delta: 12 },
@@ -114,7 +602,7 @@ function mockDashboard() {
   };
 }
 
-function mockProducts() {
+function mockProducts(): Product[] {
   return [
     {
       id: "prod-1",
@@ -145,7 +633,7 @@ function mockProducts() {
   ];
 }
 
-function mockOrders() {
+function mockOrders(): Order[] {
   return [
     {
       id: "order-1",
@@ -156,11 +644,11 @@ function mockOrders() {
       productTitle: "Portable desk fan",
       amount: 138,
       profit: 48,
-      status: "paid",
+      status: "completed",
       createdAt: new Date().toISOString(),
       timeline: [
         {
-          status: "paid",
+          status: "completed",
           at: new Date().toISOString(),
           description: "Payment received."
         }
@@ -175,11 +663,11 @@ function mockOrders() {
       productTitle: "Dorm storage box",
       amount: 78,
       profit: 28,
-      status: "sourcing",
+      status: "purchasing",
       createdAt: new Date().toISOString(),
       timeline: [
         {
-          status: "sourcing",
+          status: "purchasing",
           at: new Date().toISOString(),
           description: "Supplier order is being prepared."
         }
@@ -188,7 +676,11 @@ function mockOrders() {
   ];
 }
 
-function mockSourcing() {
+function mockSourcing(): {
+  trend: SalesPoint[];
+  keywords: KeywordTrend[];
+  results: SourcingProduct[];
+} {
   return {
     trend: mockSalesTrend(),
     keywords: [
@@ -220,7 +712,17 @@ function mockSourcing() {
   };
 }
 
-function mockAnalytics() {
+function mockAnalytics(): {
+  salesTrend: SalesPoint[];
+  productRanking: Array<{ title: string; sales: number; revenue: number }>;
+  platformShare: Array<{ platform: "douyin" | "pdd" | "taobao"; value: number }>;
+  profitReport: Array<{
+    date: string;
+    revenue: number;
+    cost: number;
+    profit: number;
+  }>;
+} {
   return {
     salesTrend: mockSalesTrend(),
     productRanking: [
@@ -259,4 +761,100 @@ function mockSalesTrend() {
       profit: Math.round(total * 0.24)
     };
   });
+}
+
+function mapProductStatus(status: string): "draft" | "active" | "paused" {
+  if (status === "active") return "active";
+  if (status === "archived") return "paused";
+  return "draft";
+}
+
+function mapOrderStatus(
+  status: string
+): "pending" | "sourcing" | "purchasing" | "shipped" | "completed" | "aftersale" | "failed" {
+  if (status === "fulfilled") return "completed";
+  if (status === "paid") return "purchasing";
+  if (status === "cancelled" || status === "refunded") return "failed";
+  return "pending";
+}
+
+function normalizePlatform(platform: string): "douyin" | "pdd" | "taobao" {
+  if (platform === "pdd") return "pdd";
+  if (platform === "taobao") return "taobao";
+  return "douyin";
+}
+
+function productImage(index: number): string {
+  return index % 2 === 0
+    ? "https://images.unsplash.com/photo-1586023492125-27b2c045efd7"
+    : "https://images.unsplash.com/photo-1558618666-fcd25c85cd64";
+}
+
+interface MetricCard {
+  label: string;
+  value: number;
+  delta: number;
+}
+
+interface SalesPoint {
+  date: string;
+  douyin: number;
+  pdd: number;
+  taobao: number;
+  total: number;
+  profit: number;
+}
+
+interface Product {
+  id: string;
+  image: string;
+  title: string;
+  platform: "douyin" | "pdd" | "taobao";
+  price: number;
+  cost: number;
+  stock: number;
+  status: "draft" | "active" | "paused";
+  links: Partial<Record<"douyin" | "pdd" | "taobao", string>>;
+  category: string;
+  updatedAt: string;
+}
+
+interface Order {
+  id: string;
+  platform: "douyin" | "pdd" | "taobao";
+  buyer: string;
+  phone: string;
+  address: string;
+  productTitle: string;
+  amount: number;
+  profit: number;
+  status: "pending" | "sourcing" | "purchasing" | "shipped" | "completed" | "aftersale" | "failed";
+  trackingNumber?: string;
+  logisticsCompany?: string;
+  createdAt: string;
+  timeline: Array<{
+    status: string;
+    at: string;
+    description: string;
+  }>;
+}
+
+interface KeywordTrend {
+  keyword: string;
+  searchVolume: number;
+  growth: number;
+}
+
+interface SourcingProduct {
+  id: string;
+  image: string;
+  title: string;
+  price: number;
+  monthlySales: number;
+  supplier: string;
+  score: number;
+  profitMargin: number;
+  stock: number;
+  tags: string[];
+  details: Record<string, number>;
 }

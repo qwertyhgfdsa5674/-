@@ -9,6 +9,16 @@ import type {
   SourcingData
 } from "../api/types";
 
+interface ProductsResponse {
+  sourceType: "database" | "mock";
+  products: Product[];
+}
+
+interface OrdersResponse {
+  sourceType: "database" | "mock";
+  orders: Order[];
+}
+
 export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
@@ -19,14 +29,22 @@ export function useDashboard() {
 export function useProducts() {
   return useQuery({
     queryKey: ["products"],
-    queryFn: () => getJson<Product[]>("/api/products")
+    queryFn: async () => {
+      const response = await getJson<Product[] | ProductsResponse>(
+        "/api/products"
+      );
+      return Array.isArray(response) ? response : response.products;
+    }
   });
 }
 
 export function useOrders() {
   return useQuery({
     queryKey: ["orders"],
-    queryFn: () => getJson<Order[]>("/api/orders")
+    queryFn: async () => {
+      const response = await getJson<Order[] | OrdersResponse>("/api/orders");
+      return Array.isArray(response) ? response : response.orders;
+    }
   });
 }
 
