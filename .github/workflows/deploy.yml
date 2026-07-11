@@ -127,27 +127,18 @@ jobs:
           echo "SERVER_IMAGE=${{ env.REGISTRY }}/${DOCKER_NS}/server:${IMAGE_TAG}" >> "$GITHUB_ENV"
           echo "WEB_IMAGE=${{ env.REGISTRY }}/${DOCKER_NS}/web:${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-      - name: Login to registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull images to runner
+      - name: Pull images on server
         timeout-minutes: 10
         run: |
-          docker pull "${SERVER_IMAGE}"
-          docker pull "${WEB_IMAGE}"
-          docker images "${SERVER_IMAGE}"
-          docker images "${WEB_IMAGE}"
-
-      - name: Transfer images to server
-        timeout-minutes: 20
-        run: |
-          docker save "${SERVER_IMAGE}" "${WEB_IMAGE}" \
-            | gzip -1 \
-            | ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "gunzip | docker load"
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<EOF
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+            echo "Pulling application images..."
+            timeout --kill-after=30s 8m docker compose -f docker-compose.prod.yml pull server web
+            docker images "${SERVER_IMAGE}"
+            docker images "${WEB_IMAGE}"
+          EOF
 
       - name: Restart remote services
         timeout-minutes: 8
