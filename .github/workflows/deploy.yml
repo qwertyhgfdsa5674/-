@@ -174,11 +174,17 @@ jobs:
       - name: Restart remote services
         timeout-minutes: 8
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'EOF'
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'EOF'
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
-            echo "Starting services without pulling public dependency images..."
-            timeout --kill-after=30s 5m docker compose -f docker-compose.prod.yml up -d --remove-orphans --pull never
+            echo "Starting application services without pulling images..."
+            timeout --kill-after=30s 5m docker compose -f docker-compose.prod.yml up -d --no-deps --pull never server web
+            if [ -n "$(docker compose -f docker-compose.prod.yml ps -q nginx)" ]; then
+              docker compose -f docker-compose.prod.yml exec -T nginx nginx -t
+              docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload
+            else
+              docker compose -f docker-compose.prod.yml up -d --no-deps --pull never nginx
+            fi
             docker compose -f docker-compose.prod.yml ps
             docker image prune -f
           EOF
