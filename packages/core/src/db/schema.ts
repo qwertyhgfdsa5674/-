@@ -56,7 +56,10 @@ export const orders = pgTable("orders", {
     .notNull()
     .references(() => products.id),
   quantity: integer("quantity").notNull(),
-  status: orderStatus("status").notNull().default("pending")
+  status: orderStatus("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
 });
 
 export const pricing = pgTable("pricing", {

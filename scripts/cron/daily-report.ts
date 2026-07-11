@@ -93,38 +93,52 @@ async function loadMetrics(): Promise<{
     const sql = postgres.default(databaseUrl, { max: 1 });
 
     try {
-      const [orderStats, alertStats, priceStats, reviewStats] =
+      const [orderStats, profitStats, alertStats, priceStats, reviewStats] =
         await Promise.all([
-          sql<{ orders: string; revenue: string; pending_orders: string }[]>`
-          select
-            count(*)::text as orders,
-            coalesce(sum(quantity), 0)::text as revenue,
-            count(*) filter (where status in ('pending', 'paid'))::text as pending_orders
-          from orders
-        `,
+          sql<{
+            orders: string;
+            revenue: string;
+            pending_orders: string;
+          }[]>`
+            select
+              count(*)::text as orders,
+              coalesce(sum(o.quantity * p.list_price_cents), 0)::text as revenue,
+              count(*) filter (where o.status in ('pending', 'paid'))::text as pending_orders
+            from orders o
+            left join pricing p on o.product_id = p.product_id
+            where o.created_at >= now() - interval '1 day'
+          `,
+          sql<{ profit: string }[]>`
+            select
+              coalesce(sum(o.quantity * (p.list_price_cents - p.cost_cents)), 0)::text as profit
+            from orders o
+            join pricing p on o.product_id = p.product_id
+            where o.status = 'fulfilled'
+              and o.created_at >= now() - interval '1 day'
+          `,
           sql<{ inventory_alerts: string }[]>`
-          select count(*)::text as inventory_alerts
-          from inventory_alerts
-          where resolved = false
-        `,
+            select count(*)::text as inventory_alerts
+            from inventory_alerts
+            where resolved = false
+          `,
           sql<{ price_changes: string }[]>`
-          select count(*)::text as price_changes
-          from price_history
-          where changed_at >= now() - interval '1 day'
-        `,
+            select count(*)::text as price_changes
+            from price_history
+            where changed_at >= now() - interval '1 day'
+          `,
           sql<{ review_issues: string }[]>`
-          select count(*)::text as review_issues
-          from review_insights
-          where sentiment = 'negative'
-            and collected_at >= now() - interval '7 days'
-        `
+            select count(*)::text as review_issues
+            from review_insights
+            where sentiment = 'negative'
+              and collected_at >= now() - interval '7 days'
+          `
         ]);
       const orderRow = orderStats[0];
 
       return {
         orders: Number(orderRow?.orders ?? 0),
         revenue: Number(orderRow?.revenue ?? 0),
-        profit: 0,
+        profit: Number(profitStats[0]?.profit ?? 0),
         pendingOrders: Number(orderRow?.pending_orders ?? 0),
         inventoryAlerts: Number(alertStats[0]?.inventory_alerts ?? 0),
         priceChanges: Number(priceStats[0]?.price_changes ?? 0),
