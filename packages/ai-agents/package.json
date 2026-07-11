@@ -13,6 +13,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-ecommerce/data-pipeline": "workspace:*",
     "@ai-ecommerce/platform-alibaba1688": "workspace:*",
     "@anthropic-ai/sdk": "^0.32.1",
     "openai": "^4.77.0",

@@ -13,8 +13,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-ecommerce/ab-test": "workspace:*",
     "@ai-ecommerce/core": "workspace:*",
+    "@ai-ecommerce/data-pipeline": "workspace:*",
+    "@ai-ecommerce/dynamic-pricing": "workspace:*",
+    "@ai-ecommerce/inventory-planner": "workspace:*",
     "@ai-ecommerce/platform-alibaba1688": "workspace:*",
+    "@ai-ecommerce/risk-control": "workspace:*",
     "bullmq": "^5.34.2",
     "fastify": "^5.2.1",
     "ioredis": "^5.4.2",

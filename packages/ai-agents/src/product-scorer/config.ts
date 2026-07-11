@@ -13,19 +13,21 @@ const STRATEGY_WEIGHT_ADJUSTMENTS: Record<
   Partial<ScoreWeights>
 > = {
   low_price: {
-    priceCompetitiveness: 0.4,
-    supplierReliability: 0.2,
-    productQuality: 0.15,
-    fulfillmentCapability: 0.15,
-    profitMargin: 0.1
+    priceCompetitiveness: 0.35,
+    supplierReliability: 0.17,
+    productQuality: 0.13,
+    fulfillmentCapability: 0.13,
+    profitMargin: 0.07,
+    trendTimeliness: 0.15
   },
   mid_volume: DefaultScoringConfig.weights,
   high_margin: {
-    priceCompetitiveness: 0.2,
-    supplierReliability: 0.2,
-    productQuality: 0.2,
-    fulfillmentCapability: 0.15,
-    profitMargin: 0.25
+    priceCompetitiveness: 0.17,
+    supplierReliability: 0.18,
+    productQuality: 0.18,
+    fulfillmentCapability: 0.12,
+    profitMargin: 0.22,
+    trendTimeliness: 0.13
   }
 };
 

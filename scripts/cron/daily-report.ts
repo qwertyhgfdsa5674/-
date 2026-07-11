@@ -7,13 +7,7 @@ import {
 } from "./shared.ts";
 
 const startedAt = Date.now();
-const metrics = {
-  orders: 0,
-  revenue: 0,
-  profit: 0,
-  pendingOrders: 0,
-  inventoryAlerts: 0
-};
+const metrics = await loadMetrics();
 
 logEvent({
   event: "daily_report_started",
@@ -76,4 +70,88 @@ async function generateInsight(input: typeof metrics): Promise<string> {
     });
     return "AI insight is unavailable; prioritize fulfillment and inventory alerts.";
   }
+}
+
+async function loadMetrics(): Promise<{
+  orders: number;
+  revenue: number;
+  profit: number;
+  pendingOrders: number;
+  inventoryAlerts: number;
+  priceChanges: number;
+  reviewIssues: number;
+  sourceType: "database" | "mock";
+}> {
+  const databaseUrl = getEnv("DATABASE_URL");
+
+  if (!databaseUrl) {
+    return fallbackMetrics();
+  }
+
+  try {
+    const postgres = await import("postgres");
+    const sql = postgres.default(databaseUrl, { max: 1 });
+
+    try {
+      const [orderStats, alertStats, priceStats, reviewStats] =
+        await Promise.all([
+          sql<{ orders: string; revenue: string; pending_orders: string }[]>`
+          select
+            count(*)::text as orders,
+            coalesce(sum(quantity), 0)::text as revenue,
+            count(*) filter (where status in ('pending', 'paid'))::text as pending_orders
+          from orders
+        `,
+          sql<{ inventory_alerts: string }[]>`
+          select count(*)::text as inventory_alerts
+          from inventory_alerts
+          where resolved = false
+        `,
+          sql<{ price_changes: string }[]>`
+          select count(*)::text as price_changes
+          from price_history
+          where changed_at >= now() - interval '1 day'
+        `,
+          sql<{ review_issues: string }[]>`
+          select count(*)::text as review_issues
+          from review_insights
+          where sentiment = 'negative'
+            and collected_at >= now() - interval '7 days'
+        `
+        ]);
+      const orderRow = orderStats[0];
+
+      return {
+        orders: Number(orderRow?.orders ?? 0),
+        revenue: Number(orderRow?.revenue ?? 0),
+        profit: 0,
+        pendingOrders: Number(orderRow?.pending_orders ?? 0),
+        inventoryAlerts: Number(alertStats[0]?.inventory_alerts ?? 0),
+        priceChanges: Number(priceStats[0]?.price_changes ?? 0),
+        reviewIssues: Number(reviewStats[0]?.review_issues ?? 0),
+        sourceType: "database"
+      };
+    } finally {
+      await sql.end();
+    }
+  } catch (error) {
+    logEvent({
+      event: "daily_report_database_fallback",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return fallbackMetrics();
+  }
+}
+
+function fallbackMetrics() {
+  return {
+    orders: 0,
+    revenue: 0,
+    profit: 0,
+    pendingOrders: 0,
+    inventoryAlerts: 0,
+    priceChanges: 0,
+    reviewIssues: 0,
+    sourceType: "mock" as const
+  };
 }

@@ -1,18 +1,14 @@
 import {
+  createDefaultTrendSources,
+  TrendAggregator
+} from "@ai-ecommerce/data-pipeline";
+import {
   fetchJson,
   getEnv,
-  hasEnv,
   logEvent,
   notifyFeishu,
   summarizeEnv
 } from "./shared.ts";
-
-interface TrendItem {
-  platform: "douyin" | "pdd" | "taobao";
-  keyword: string;
-  score: number;
-  category: string;
-}
 
 const startedAt = new Date();
 const credentialNames = [
@@ -52,82 +48,29 @@ await notifyFeishu("Trend collection completed", [
     .join(", ")}`
 ]);
 
-async function collectPlatformTrends(): Promise<TrendItem[]> {
-  const platformSignals: TrendItem[] = [];
+async function collectPlatformTrends() {
+  const aggregator = new TrendAggregator();
+  const trends = await aggregator.collectAndAggregate(
+    createDefaultTrendSources()
+  );
 
-  if (hasEnv("DOUYIN_APP_KEY", "DOUYIN_APP_SECRET")) {
-    platformSignals.push(
-      ...mockPlatformTrends("douyin", [
-        "short_video_hit",
-        "summer_sunscreen",
-        "storage_tool"
-      ])
-    );
-  } else {
+  for (const trend of trends) {
     logEvent({
-      event: "trend_platform_skipped",
-      platform: "douyin",
-      reason: "missing_credentials"
+      event: "trend_collected",
+      keyword: trend.keyword,
+      platform: trend.platform,
+      source: trend.source,
+      sourceType: trend.sourceType,
+      score: trend.score,
+      growthRate: trend.growthRate
     });
   }
 
-  if (hasEnv("PDD_CLIENT_ID", "PDD_CLIENT_SECRET")) {
-    platformSignals.push(
-      ...mockPlatformTrends("pdd", [
-        "low_price_tissue",
-        "home_appliance",
-        "dorm_essentials"
-      ])
-    );
-  } else {
-    logEvent({
-      event: "trend_platform_skipped",
-      platform: "pdd",
-      reason: "missing_credentials"
-    });
-  }
-
-  if (hasEnv("TAOBAO_APP_KEY", "TAOBAO_APP_SECRET")) {
-    platformSignals.push(
-      ...mockPlatformTrends("taobao", [
-        "new_arrival_2026",
-        "desk_setup",
-        "commuter_bag"
-      ])
-    );
-  } else {
-    logEvent({
-      event: "trend_platform_skipped",
-      platform: "taobao",
-      reason: "missing_credentials"
-    });
-  }
-
-  return platformSignals.length > 0 ? platformSignals : mockFallbackTrends();
-}
-
-function mockPlatformTrends(
-  platform: TrendItem["platform"],
-  keywords: string[]
-): TrendItem[] {
-  return keywords.map((keyword, index) => ({
-    platform,
-    keyword,
-    score: 100 - index * 8,
-    category: index % 2 === 0 ? "daily_goods" : "fashion_accessories"
-  }));
-}
-
-function mockFallbackTrends(): TrendItem[] {
-  return [
-    ...mockPlatformTrends("douyin", ["video_friendly_product", "lazy_home"]),
-    ...mockPlatformTrends("pdd", ["repeat_purchase_value", "family_essential"]),
-    ...mockPlatformTrends("taobao", ["search_growth", "scenario_outfit"])
-  ];
+  return trends;
 }
 
 async function analyzeTrends(
-  trends: TrendItem[]
+  trends: Awaited<ReturnType<typeof collectPlatformTrends>>
 ): Promise<{ provider: string; summary: string }> {
   const prompt = `Summarize these ecommerce trend keywords in one short Chinese sentence: ${JSON.stringify(trends)}`;
   const openAiKey = getEnv("OPENAI_API_KEY");

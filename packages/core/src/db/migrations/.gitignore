@@ -1,0 +1,4 @@
+# Hand-written migration SQL files (e.g. 0000_initial_schema.sql) are tracked.
+# If you later run `drizzle-kit generate`, it may produce additional files
+# (snapshots, meta journal) which you can either commit or ignore here:
+# meta/

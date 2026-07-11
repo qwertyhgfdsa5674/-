@@ -5,7 +5,8 @@ export type DimensionKey =
   | "supplierReliability"
   | "productQuality"
   | "fulfillmentCapability"
-  | "profitMargin";
+  | "profitMargin"
+  | "trendTimeliness";
 
 export interface DimensionScoringStrategy {
   readonly key: DimensionKey;
@@ -36,9 +37,21 @@ export class SupplierReliabilityStrategy implements DimensionScoringStrategy {
     const responseScore = clampScore(
       normalizeRate(input.supplier.responseRate) * 100
     );
+    const shipConsistencyScore = scoreShipConsistency(input);
+    const returnScore = clampScore(
+      (1 - normalizeRate(input.supplierMetrics?.returnRate ?? 0.05)) * 100
+    );
+    const cooperationScore = clampScore(
+      ((input.supplierMetrics?.cooperationCount ?? 0) / 20) * 100
+    );
 
     return clampScore(
-      yearsScore * 0.4 + disputeScore * 0.4 + responseScore * 0.2
+      yearsScore * 0.25 +
+        disputeScore * 0.25 +
+        responseScore * 0.15 +
+        shipConsistencyScore * 0.15 +
+        returnScore * 0.1 +
+        cooperationScore * 0.1
     );
   }
 }
@@ -115,13 +128,44 @@ export class ProfitMarginStrategy implements DimensionScoringStrategy {
   }
 }
 
+export class TrendTimelinessStrategy implements DimensionScoringStrategy {
+  public readonly key = "trendTimeliness" as const;
+
+  public score(input: ProductScoreInput): number {
+    const trendSignals = input.trendSignals;
+
+    if (!trendSignals) {
+      return 75;
+    }
+
+    const keywordScoreValues = Object.values(trendSignals.keywordScores);
+    const keywordScore =
+      keywordScoreValues.length > 0
+        ? keywordScoreValues.reduce((total, score) => total + score, 0) /
+          keywordScoreValues.length
+        : 45;
+    const semanticScore =
+      trendSignals.semanticMatchScore ?? inferSemanticTrendMatch(input);
+    const seasonalScore = trendSignals.categoryBoost;
+    const freshnessPenalty = trendSignals.obsoleteRisk;
+
+    return clampScore(
+      keywordScore * 0.45 +
+        semanticScore * 0.25 +
+        seasonalScore * 0.2 +
+        (100 - freshnessPenalty) * 0.1
+    );
+  }
+}
+
 export function createDefaultStrategies(): DimensionScoringStrategy[] {
   return [
     new PriceCompetitivenessStrategy(),
     new SupplierReliabilityStrategy(),
     new ProductQualityStrategy(),
     new FulfillmentCapabilityStrategy(),
-    new ProfitMarginStrategy()
+    new ProfitMarginStrategy(),
+    new TrendTimelinessStrategy()
   ];
 }
 
@@ -163,4 +207,33 @@ function readFulfillmentMetric(
   fallback: number
 ): number {
   return input.fulfillmentMetrics?.[key] ?? fallback;
+}
+
+function scoreShipConsistency(input: ProductScoreInput): number {
+  const promised = input.supplierMetrics?.promisedShipHours;
+  const actual = input.supplierMetrics?.actualShipHours;
+
+  if (!promised || !actual) {
+    return 70;
+  }
+
+  return clampScore((promised / Math.max(actual, promised)) * 100);
+}
+
+function inferSemanticTrendMatch(input: ProductScoreInput): number {
+  const title = input.product.title.toLowerCase();
+  const keywordScores = Object.entries(input.trendSignals?.keywordScores ?? {});
+
+  if (keywordScores.length === 0) return 45;
+
+  const matchingScores = keywordScores
+    .filter(([keyword]) => title.includes(keyword.toLowerCase()))
+    .map(([, score]) => score);
+
+  if (matchingScores.length === 0) return 35;
+
+  return (
+    matchingScores.reduce((total, score) => total + score, 0) /
+    matchingScores.length
+  );
 }

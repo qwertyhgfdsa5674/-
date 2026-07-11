@@ -80,7 +80,8 @@ export class ProductScorer {
         "fulfillmentCapability",
         input
       ),
-      profitMargin: this.scoreDimension("profitMargin", input)
+      profitMargin: this.scoreDimension("profitMargin", input),
+      trendTimeliness: this.scoreDimension("trendTimeliness", input)
     };
   }
 
@@ -114,7 +115,7 @@ function recommend(score: number, riskFlags: string[]): ProductRecommendation {
     return score >= 75 ? "consider" : "pass";
   }
 
-  if (score >= 85) {
+  if (score >= 80) {
     return "strong_buy";
   }
 
@@ -159,6 +160,14 @@ function createRiskFlags(
 
   if (input.marketData.competitorCount > 200) {
     flags.push("crowded_market");
+  }
+
+  if ((input.trendSignals?.obsoleteRisk ?? 0) >= 75) {
+    flags.push("obsolete_trend_risk");
+  }
+
+  if ((scores.trendTimeliness ?? 0) < 35) {
+    flags.push("weak_trend_match");
   }
 
   return flags;

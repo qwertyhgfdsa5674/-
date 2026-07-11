@@ -11,7 +11,8 @@ export const ScoreWeightsSchema = z.object({
   supplierReliability: z.number().nonnegative(),
   productQuality: z.number().nonnegative(),
   fulfillmentCapability: z.number().nonnegative(),
-  profitMargin: z.number().nonnegative()
+  profitMargin: z.number().nonnegative(),
+  trendTimeliness: z.number().nonnegative()
 });
 
 export type ScoreWeights = z.infer<typeof ScoreWeightsSchema>;
@@ -43,11 +44,12 @@ export type ScoringConfig = z.infer<typeof ScoringConfigSchema>;
 
 export const DefaultScoringConfig = {
   weights: {
-    priceCompetitiveness: 0.3,
-    supplierReliability: 0.25,
-    productQuality: 0.2,
-    fulfillmentCapability: 0.15,
-    profitMargin: 0.1
+    priceCompetitiveness: 0.25,
+    supplierReliability: 0.2,
+    productQuality: 0.17,
+    fulfillmentCapability: 0.13,
+    profitMargin: 0.1,
+    trendTimeliness: 0.15
   },
   pricingStrategy: "mid_volume"
 } satisfies ScoringConfig;
@@ -81,6 +83,24 @@ export const ProductScoreInputSchema = z.object({
     .object({
       shippingHours: z.number().nonnegative().optional(),
       logisticsScore: z.number().min(0).max(100).optional()
+    })
+    .optional(),
+  trendSignals: z
+    .object({
+      keywordScores: z.record(z.number().min(0).max(100)).default({}),
+      categoryBoost: z.number().min(0).max(100).default(0),
+      obsoleteRisk: z.number().min(0).max(100).default(0),
+      semanticMatchScore: z.number().min(0).max(100).optional()
+    })
+    .optional(),
+  supplierMetrics: z
+    .object({
+      promisedShipHours: z.number().positive().optional(),
+      actualShipHours: z.number().positive().optional(),
+      returnRate: z.number().nonnegative().optional(),
+      responseHours: z.number().nonnegative().optional(),
+      cooperationCount: z.number().int().nonnegative().optional(),
+      cooperationAmount: z.number().nonnegative().optional()
     })
     .optional()
 });
