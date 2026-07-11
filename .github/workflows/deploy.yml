@@ -139,7 +139,8 @@ jobs:
         run: |
           docker pull "${SERVER_IMAGE}"
           docker pull "${WEB_IMAGE}"
-          docker images "${SERVER_IMAGE}" "${WEB_IMAGE}"
+          docker images "${SERVER_IMAGE}"
+          docker images "${WEB_IMAGE}"
 
       - name: Transfer images to server
         timeout-minutes: 20
