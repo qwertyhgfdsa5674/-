@@ -1,5 +1,7 @@
 import { Queue } from "bullmq";
 import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
 import postgres, { type Sql } from "postgres";
 import { z } from "zod";
@@ -76,6 +78,19 @@ export async function createServer() {
   await app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute"
+  });
+
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: "AI Ecommerce API",
+        version: "0.1.0"
+      }
+    }
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: "/docs"
   });
 
   app.get("/health", async () => ({
