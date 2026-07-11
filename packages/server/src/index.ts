@@ -35,7 +35,15 @@ type MockSource<T> = {
 } & T;
 
 export async function createServer() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: {
+      level: process.env["LOG_LEVEL"] ?? "info",
+      transport:
+        process.env["NODE_ENV"] === "production"
+          ? undefined
+          : { target: "pino-pretty" }
+    }
+  });
   const apiKey = process.env["API_KEY"];
   const sql = createDatabaseConnection();
   const trendAggregator = new TrendAggregator();

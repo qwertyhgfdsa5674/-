@@ -5,6 +5,7 @@ import {
 } from "@ai-ecommerce/platform-alibaba1688";
 import { Job, Queue, Worker, type WorkerOptions } from "bullmq";
 import { Redis } from "ioredis";
+import pino from "pino";
 import type postgres from "postgres";
 import { z } from "zod";
 
@@ -209,7 +210,7 @@ export class OrderFulfillmentWorker {
     this.purchaseMaxAttempts =
       options.purchaseMaxAttempts ?? DEFAULT_PURCHASE_MAX_ATTEMPTS;
     this.sleep = options.sleep ?? sleep;
-    this.logger = options.logger ?? consoleLogger;
+    this.logger = options.logger ?? pinoLogger;
   }
 
   public async start(): Promise<void> {
@@ -773,11 +774,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const consoleLogger: StructuredLogger = {
-  info(payload) {
-    console.info(JSON.stringify(payload));
-  },
-  error(payload) {
-    console.error(JSON.stringify(payload));
-  }
-};
+const pinoLogger: StructuredLogger = pino({
+  base: undefined,
+  level: process.env["LOG_LEVEL"] ?? "info"
+});
