@@ -52,13 +52,17 @@ export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   platform: varchar("platform", { length: 32 }).notNull(),
   externalOrderId: varchar("external_order_id", { length: 180 }).notNull(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   quantity: integer("quantity").notNull(),
   status: orderStatus("status").notNull().default("pending")
 });
 
 export const pricing = pgTable("pricing", {
-  productId: uuid("product_id").primaryKey(),
+  productId: uuid("product_id")
+    .primaryKey()
+    .references(() => products.id),
   costCents: integer("cost_cents").notNull(),
   listPriceCents: integer("list_price_cents").notNull(),
   currency: varchar("currency", { length: 3 }).notNull().default("CNY")
@@ -105,7 +109,9 @@ export const eventCalendar = pgTable("event_calendar", {
 
 export const listingTasks = pgTable("listing_tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   targetPlatform: varchar("target_platform", { length: 32 }).notNull(),
   status: varchar("status", { length: 32 }).notNull().default("pending"),
   externalListingId: varchar("external_listing_id", { length: 180 }),
@@ -117,7 +123,9 @@ export const listingTasks = pgTable("listing_tasks", {
 
 export const priceHistory = pgTable("price_history", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   costCents: integer("cost_cents").notNull(),
   listPriceCents: integer("list_price_cents").notNull(),
   changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow(),
@@ -126,7 +134,9 @@ export const priceHistory = pgTable("price_history", {
 
 export const complianceChecks = pgTable("compliance_checks", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   checkType: varchar("check_type", { length: 64 }).notNull(),
   passed: boolean("passed").notNull(),
   details: jsonb("details"),
@@ -147,7 +157,9 @@ export const trendHistory = pgTable("trend_history", {
 
 export const abTests = pgTable("ab_tests", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   name: varchar("name", { length: 200 }).notNull(),
   status: varchar("status", { length: 32 }).notNull().default("draft"),
   variants: jsonb("variants").notNull(),
@@ -159,7 +171,9 @@ export const abTests = pgTable("ab_tests", {
 
 export const inventoryAlerts = pgTable("inventory_alerts", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   skuId: varchar("sku_id", { length: 180 }),
   alertType: varchar("alert_type", { length: 48 }).notNull(),
   severity: varchar("severity", { length: 24 }).notNull().default("medium"),
@@ -171,7 +185,9 @@ export const inventoryAlerts = pgTable("inventory_alerts", {
 
 export const supplierPerformance = pgTable("supplier_performance", {
   id: uuid("id").primaryKey().defaultRandom(),
-  supplierId: uuid("supplier_id").notNull(),
+  supplierId: uuid("supplier_id")
+    .notNull()
+    .references(() => suppliers.id),
   promisedShipHours: integer("promised_ship_hours"),
   actualShipHours: integer("actual_ship_hours"),
   returnRate: real("return_rate"),
@@ -185,8 +201,12 @@ export const supplierPerformance = pgTable("supplier_performance", {
 
 export const supplierAlternatives = pgTable("supplier_alternatives", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
-  supplierId: uuid("supplier_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
+  supplierId: uuid("supplier_id")
+    .notNull()
+    .references(() => suppliers.id),
   priority: integer("priority").notNull().default(0),
   active: boolean("active").notNull().default(true),
   switchReason: varchar("switch_reason", { length: 200 }),
@@ -195,7 +215,9 @@ export const supplierAlternatives = pgTable("supplier_alternatives", {
 
 export const reviewInsights = pgTable("review_insights", {
   id: uuid("id").primaryKey().defaultRandom(),
-  productId: uuid("product_id").notNull(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   platform: varchar("platform", { length: 32 }).notNull(),
   sentiment: varchar("sentiment", { length: 24 }).notNull(),
   keywords: jsonb("keywords").notNull(),
