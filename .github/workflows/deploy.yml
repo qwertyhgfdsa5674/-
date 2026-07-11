@@ -127,14 +127,17 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           command: |
+            DOCKER_NS="${{ github.repository_owner }}/ai-ecommerce"
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+            SERVER_IMAGE="${{ env.REGISTRY }}/${DOCKER_NS}/server:${IMAGE_TAG}"
+            WEB_IMAGE="${{ env.REGISTRY }}/${DOCKER_NS}/web:${IMAGE_TAG}"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+            docker pull "${SERVER_IMAGE}"
+            docker pull "${WEB_IMAGE}"
+            docker save "${SERVER_IMAGE}" "${WEB_IMAGE}" | gzip | ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "gunzip | docker load"
             ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" <<'EOF'
               set -euo pipefail
               cd "${{ secrets.DEPLOY_PATH }}"
-              if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
-                printf '%s' "${{ secrets.GHCR_TOKEN }}" | docker login "${{ env.REGISTRY }}" -u "${{ vars.GHCR_USERNAME || github.actor }}" --password-stdin
-              fi
-              echo "Pulling application images..."
-              timeout --kill-after=30s 5m docker compose -f docker-compose.prod.yml pull server web
               echo "Starting services without pulling public dependency images..."
               timeout --kill-after=30s 5m docker compose -f docker-compose.prod.yml up -d --remove-orphans --pull never
               docker compose -f docker-compose.prod.yml ps
