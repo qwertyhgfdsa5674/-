@@ -1,12 +1,11 @@
 import { createServer } from "./index.js";
-import { DEFAULT_HOST, DEFAULT_PORT } from "./constants.js";
+import { loadConfig } from "./config.js";
 
-const port = Number(process.env["PORT"] ?? DEFAULT_PORT);
-const host = process.env["HOST"] ?? DEFAULT_HOST;
-const app = await createServer();
+const config = loadConfig();
+const app = await createServer(config);
 
 try {
-  await app.listen({ host, port });
+  await app.listen({ host: config.host, port: config.port });
 } catch (error) {
   app.log.error(error);
   process.exit(1);

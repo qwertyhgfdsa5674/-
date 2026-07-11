@@ -25,6 +25,7 @@ import {
   ComplianceInputSchema,
   ComplianceScanner
 } from "@ai-ecommerce/risk-control";
+import { loadConfig, type AppConfig } from "./config.js";
 import { DEFAULT_REDIS_URL } from "./constants.js";
 
 type Db = Sql<Record<string, never>>;
@@ -37,10 +38,10 @@ type MockSource<T> = {
   sourceType: "mock";
 } & T;
 
-export async function createServer() {
+export async function createServer(config: AppConfig = loadConfig()) {
   const app = Fastify({
     logger: {
-      level: process.env["LOG_LEVEL"] ?? "info",
+      level: config.logLevel,
       transport:
         process.env["NODE_ENV"] === "production"
           ? undefined
@@ -76,8 +77,8 @@ export async function createServer() {
   });
 
   await app.register(rateLimit, {
-    max: 100,
-    timeWindow: "1 minute"
+    max: config.rateLimit.max,
+    timeWindow: config.rateLimit.timeWindow
   });
 
   await app.register(swagger, {
