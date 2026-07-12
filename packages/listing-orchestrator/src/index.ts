@@ -2,9 +2,14 @@ import { z } from "zod";
 
 export const ListingStatusSchema = z.enum([
   "pending",
+  "generating_content",
+  "generating_images",
+  "validating_attributes",
   "uploading_images",
   "listing",
   "live",
+  "review_required",
+  "blocked",
   "error",
   "dead_letter"
 ]);
@@ -98,3 +103,5 @@ export class InMemoryListingMap {
 function key(productId: string, platform: string): string {
   return `${platform}:${productId}`;
 }
+
+export * from "./commerce-workflow.js";

@@ -325,6 +325,111 @@ describe("API hardening and diagnostics", () => {
     });
   });
 
+  it("publishes selected source products through a single listing workflow endpoint", async () => {
+    process.env["API_KEY"] = "secret";
+    delete process.env["DATABASE_URL"];
+    const app = await createServer(testConfig());
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/listings/publish",
+      headers: {
+        authorization: "Bearer secret"
+      },
+      payload: {
+        sourceProductIds: ["1688-1"],
+        targetPlatforms: ["pdd"],
+        reviewMode: "auto",
+        operatorId: "ops-1"
+      }
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      accepted: 1,
+      duplicates: [],
+      tasks: [
+        {
+          sourceProductId: "1688-1",
+          platform: "pdd",
+          status: "live",
+          externalListingId: "pdd-1688-1"
+        }
+      ],
+      metrics: {
+        candidatesScanned: 1,
+        listingsCreated: 1,
+        listingsLive: 1
+      }
+    });
+  });
+
+  it("limits publish attempts by quota across platform fan-out", async () => {
+    process.env["API_KEY"] = "secret";
+    delete process.env["DATABASE_URL"];
+    const app = await createServer(testConfig());
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/listings/publish",
+      headers: {
+        authorization: "Bearer secret"
+      },
+      payload: {
+        sourceProductIds: ["1688-1"],
+        targetPlatforms: ["douyin", "pdd", "taobao"],
+        reviewMode: "auto",
+        operatorId: "ops-1",
+        quotaPolicy: {
+          maxListings: 1
+        }
+      }
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      accepted: 1,
+      tasks: [
+        {
+          platform: "douyin"
+        }
+      ],
+      duplicates: []
+    });
+  });
+
+  it("fails closed in production when no real listing workflow is injected", async () => {
+    process.env["NODE_ENV"] = "production";
+    process.env["API_KEY"] = "secret";
+    delete process.env["DATABASE_URL"];
+    const app = await createServer(testConfig());
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/listings/publish",
+      headers: {
+        authorization: "Bearer secret"
+      },
+      payload: {
+        sourceProductIds: ["1688-1"],
+        targetPlatforms: ["pdd"],
+        reviewMode: "auto",
+        operatorId: "ops-1"
+      }
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error: "Listing workflow is not configured"
+    });
+  });
+
   it("does not report mock diagnostics as the source in production", async () => {
     process.env["NODE_ENV"] = "production";
     process.env["API_KEY"] = "secret";

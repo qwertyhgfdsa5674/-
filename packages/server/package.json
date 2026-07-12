@@ -22,6 +22,7 @@
     "@ai-ecommerce/data-pipeline": "workspace:*",
     "@ai-ecommerce/dynamic-pricing": "workspace:*",
     "@ai-ecommerce/inventory-planner": "workspace:*",
+    "@ai-ecommerce/listing-orchestrator": "workspace:*",
     "@ai-ecommerce/platform-alibaba1688": "workspace:*",
     "@ai-ecommerce/risk-control": "workspace:*",
     "@fastify/rate-limit": "^11.1.0",

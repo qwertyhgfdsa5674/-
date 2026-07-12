@@ -183,6 +183,9 @@ importers:
       "@ai-ecommerce/inventory-planner":
         specifier: workspace:*
         version: link:../inventory-planner
+      "@ai-ecommerce/listing-orchestrator":
+        specifier: workspace:*
+        version: link:../listing-orchestrator
       "@ai-ecommerce/platform-alibaba1688":
         specifier: workspace:*
         version: link:../platforms/alibaba1688

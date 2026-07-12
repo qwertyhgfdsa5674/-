@@ -24,6 +24,12 @@ import {
   InventoryPlanner
 } from "@ai-ecommerce/inventory-planner";
 import {
+  CommerceWorkflowOrchestrator,
+  type CommerceWorkflowDependencies,
+  type Platform,
+  type SourceProductDetail
+} from "@ai-ecommerce/listing-orchestrator";
+import {
   ComplianceInputSchema,
   ComplianceScanner
 } from "@ai-ecommerce/risk-control";
@@ -37,9 +43,14 @@ type RedisHealthClient = {
   disconnect: () => void;
 };
 
+type PublishWorkflowResult = Awaited<
+  ReturnType<CommerceWorkflowOrchestrator["publish"]>
+>;
+
 interface ServerDependencies {
   sql?: Db;
   redis?: RedisHealthClient;
+  listingWorkflow?: CommerceWorkflowOrchestrator;
 }
 
 type DatabaseSource<T> = {
@@ -94,6 +105,18 @@ const HEALTH_CHECK_TABLES = [
   "supplier_performance"
 ];
 
+const PublishListingsRequestSchema = z.object({
+  sourceProductIds: z.array(z.string().min(1)).min(1),
+  targetPlatforms: z.array(z.enum(["douyin", "pdd", "taobao"])).min(1),
+  reviewMode: z.enum(["auto", "manual", "force_review"]).default("auto"),
+  operatorId: z.string().min(1).default("system"),
+  quotaPolicy: z
+    .object({
+      maxListings: z.number().int().positive().optional()
+    })
+    .optional()
+});
+
 export async function createServer(
   config: AppConfig = loadConfig(),
   dependencies: ServerDependencies = {}
@@ -122,6 +145,9 @@ export async function createServer(
   const inventory = new InventoryPlanner();
   const compliance = new ComplianceScanner();
   const abTests = new AbTestAnalyzer();
+  const listingWorkflow =
+    dependencies.listingWorkflow ??
+    (canUseMockData() ? createDefaultListingWorkflow() : undefined);
 
   app.addHook("onClose", async () => {
     const closeableSql = sql as (Db & { end?: () => Promise<void> }) | undefined;
@@ -347,6 +373,31 @@ export async function createServer(
     return abTests.pickWinner(body.variants, body.minImpressions);
   });
 
+  app.post("/api/listings/publish", async (request, reply) => {
+    if (!listingWorkflow) {
+      throw new ServiceUnavailableError("Listing workflow is not configured");
+    }
+
+    const body = PublishListingsRequestSchema.parse(request.body);
+    const result = body.quotaPolicy?.maxListings
+      ? await publishLimitedListings({
+          workflow: listingWorkflow,
+          sourceProductIds: body.sourceProductIds,
+          targetPlatforms: body.targetPlatforms,
+          maxListings: body.quotaPolicy.maxListings,
+          reviewMode: body.reviewMode,
+          operatorId: body.operatorId
+        })
+      : await listingWorkflow.publish({
+          sourceProductIds: body.sourceProductIds,
+          targetPlatforms: body.targetPlatforms,
+          reviewMode: body.reviewMode,
+          operatorId: body.operatorId
+        });
+
+    return reply.status(202).send(result);
+  });
+
   return app;
 }
 
@@ -360,6 +411,156 @@ export function createDefaultQueue(redisUrl = DEFAULT_REDIS_URL) {
 
 export { createIdempotencyKey };
 export * from "./workers/order-fulfillment.js";
+
+async function publishLimitedListings(input: {
+  workflow: CommerceWorkflowOrchestrator;
+  sourceProductIds: string[];
+  targetPlatforms: Platform[];
+  maxListings: number;
+  reviewMode: "auto" | "manual" | "force_review";
+  operatorId: string;
+}) {
+  const targets = input.sourceProductIds.flatMap((sourceProductId) =>
+    input.targetPlatforms.map((platform) => ({ sourceProductId, platform }))
+  );
+  const selectedTargets = targets.slice(0, input.maxListings);
+  const combined = emptyPublishWorkflowResult();
+
+  for (const target of selectedTargets) {
+    const result = await input.workflow.publish({
+      sourceProductIds: [target.sourceProductId],
+      targetPlatforms: [target.platform],
+      reviewMode: input.reviewMode,
+      operatorId: input.operatorId
+    });
+    mergePublishWorkflowResult(combined, result);
+  }
+
+  return combined;
+}
+
+function emptyPublishWorkflowResult(): PublishWorkflowResult {
+  return {
+    accepted: 0,
+    duplicates: [],
+    tasks: [],
+    auditEvents: [],
+    metrics: {
+      candidatesScanned: 0,
+      productsScored: 0,
+      productsSelected: 0,
+      contentGenerated: 0,
+      listingsCreated: 0,
+      listingsLive: 0,
+      reviewRequired: 0,
+      failures: 0,
+      optimizations: 0,
+      delistings: 0
+    }
+  };
+}
+
+function mergePublishWorkflowResult(
+  combined: PublishWorkflowResult,
+  result: PublishWorkflowResult
+): void {
+  combined.accepted += result.accepted;
+  combined.duplicates.push(...result.duplicates);
+  combined.tasks.push(...result.tasks);
+  combined.auditEvents.push(...result.auditEvents);
+  combined.metrics.candidatesScanned += result.metrics.candidatesScanned;
+  combined.metrics.productsScored += result.metrics.productsScored;
+  combined.metrics.productsSelected += result.metrics.productsSelected;
+  combined.metrics.contentGenerated += result.metrics.contentGenerated;
+  combined.metrics.listingsCreated += result.metrics.listingsCreated;
+  combined.metrics.listingsLive += result.metrics.listingsLive;
+  combined.metrics.reviewRequired += result.metrics.reviewRequired;
+  combined.metrics.failures += result.metrics.failures;
+  combined.metrics.optimizations += result.metrics.optimizations;
+  combined.metrics.delistings += result.metrics.delistings;
+}
+
+function createDefaultListingWorkflow(): CommerceWorkflowOrchestrator {
+  const dependencies: CommerceWorkflowDependencies = {
+    async fetchSourceProduct(sourceProductId) {
+      return mockSourceProduct(sourceProductId);
+    },
+    async uploadImage({ platform, prompt }) {
+      return `https://cdn.example/${platform}/${prompt.imageType}.jpg`;
+    },
+    async publishListing({ platform, listing }) {
+      return {
+        externalListingId: `${platform}-${listing.productId}`,
+        status: "live"
+      };
+    }
+  };
+
+  return new CommerceWorkflowOrchestrator(dependencies);
+}
+
+function mockSourceProduct(sourceProductId: string): SourceProductDetail {
+  return {
+    sourceProductId,
+    sourceUrl: `https://detail.1688.com/offer/${sourceProductId}.html`,
+    title: "Summer cotton loose fit T shirt",
+    description: "Breathable cotton short sleeve top for women.",
+    sourceCategoryId: "apparel-top",
+    specs: {
+      material: "cotton",
+      color: "navy blue",
+      size: "L",
+      gender: "women"
+    },
+    skus: [
+      {
+        skuId: `${sourceProductId}-blue-l`,
+        attributes: {
+          Color: "navy blue",
+          Size: "large"
+        },
+        stock: 250,
+        priceCents: 2200
+      }
+    ],
+    images: [
+      {
+        url: "https://supplier.example/clean-image-1.jpg",
+        hasWatermark: false,
+        hasBrandMark: false,
+        hasModel: false
+      }
+    ],
+    supplier: {
+      supplierId: "supplier-1",
+      name: "Yiwu Supplier",
+      reliabilityScore: 82,
+      responseRate: 0.94,
+      disputeRate: 0.02,
+      shippingPunctuality: 0.91,
+      priceVolatility: 0.04,
+      inventoryStability: 0.89
+    },
+    inventory: {
+      availableStock: 250,
+      expectedDailySales: 8
+    },
+    pricing: {
+      sourcePriceCents: 2200,
+      domesticShippingCents: 300,
+      platformFeeRate: 0.05,
+      paymentFeeRate: 0.01,
+      adAllowanceCents: 200,
+      couponBudgetCents: 100,
+      expectedRefundCostCents: 120,
+      packagingCents: 80,
+      serviceCostCents: 100,
+      listPriceCents: 5200
+    },
+    trendScore: 88,
+    complianceRisk: "low"
+  };
+}
 
 function createDatabaseConnection(): Db | undefined {
   const databaseUrl = process.env["DATABASE_URL"];
