@@ -107,10 +107,70 @@ jobs:
         if: failure() && env.FEISHU_WEBHOOK_URL != ''
         run: node scripts/notify-feishu.mjs "CI test failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_ecommerce_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ai_ecommerce_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/ai_ecommerce_test
+      REDIS_URL: redis://localhost:6379
+      API_KEY: integration-secret
+      NODE_ENV: test
+      LOG_LEVEL: silent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        run: |
+          npm install -g pnpm@9.15.0
+          pnpm --version
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared deps
+        run: pnpm build
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Notify failure
+        if: failure() && env.FEISHU_WEBHOOK_URL != ''
+        run: node scripts/notify-feishu.mjs "CI integration failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, test, integration]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
