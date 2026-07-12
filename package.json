@@ -12,6 +12,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:integration": "pnpm --filter @ai-ecommerce/core exec vitest run test/migrate.integration.test.ts && pnpm --filter @ai-ecommerce/server test:integration && pnpm --filter @ai-ecommerce/platform-pdd --filter @ai-ecommerce/platform-alibaba1688 test",
     "format": "prettier --write ."
   },
   "dependencies": {

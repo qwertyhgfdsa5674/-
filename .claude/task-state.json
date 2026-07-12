@@ -1,0 +1,75 @@
+{
+  "version": "1.0",
+  "createdAt": "2026-07-11T00:00:00Z",
+  "lastRun": "2026-07-11T01:30:00Z",
+  "totalCompleted": 2,
+  "totalFailed": 0,
+  "tasks": [
+    {
+      "id": "task-001",
+      "module": "数据管道与可观测性",
+      "title": "完善数据库迁移 — 生成 Drizzle 迁移文件",
+      "status": "completed",
+      "attempts": 1,
+      "reviewScore": 85,
+      "reviewNotes": "通过。SQL迁移幂等、migrate.ts完善、package.json脚本正确。"
+    },
+    {
+      "id": "task-002",
+      "module": "数据管道与可观测性",
+      "title": "新增缺失的数据库表",
+      "status": "completed",
+      "attempts": 1,
+      "reviewScore": 90,
+      "reviewNotes": "通过。5张表schema+Zod+迁移SQL全部正确，代码风格一致。"
+    },
+    {
+      "id": "task-003",
+      "module": "数据管道与可观测性",
+      "title": "实现趋势采集引擎框架（data-pipeline 新包）",
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "task-004",
+      "module": "选品时效性",
+      "title": "实现电商事件日历模块",
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "task-005",
+      "module": "选品时效性",
+      "title": "为 ProductScorer 新增趋势匹配度评分维度",
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "task-006",
+      "module": "自动铺货流程",
+      "title": "实现图片处理管道（image-processor 新包）",
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "task-007",
+      "module": "智能库存管理",
+      "title": "实现库存预测与预警模块",
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "task-008",
+      "module": "运营日报增强",
+      "title": "增强运营日报 — 真实数据 + AI分析 + 周报月报",
+      "status": "pending",
+      "attempts": 0
+    }
+  ],
+  "strategy": {
+    "maxRetriesPerTask": 3,
+    "reviewThreshold": { "pass": 70, "passWithMinor": 60 },
+    "parallelTasks": 2,
+    "stopOnCriticalFailure": true
+  }
+}

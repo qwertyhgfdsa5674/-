@@ -5,11 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --exclude test/business-api.integration.test.ts",
+    "test:integration": "vitest run test/business-api.integration.test.ts",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

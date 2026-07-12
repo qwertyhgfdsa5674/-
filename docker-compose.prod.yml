@@ -18,6 +18,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      API_KEY: ${API_KEY:?API_KEY is required}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
       FEISHU_WEBHOOK_URL: ${FEISHU_WEBHOOK_URL:-}
@@ -43,7 +44,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
         ]
       interval: 30s
       timeout: 5s
